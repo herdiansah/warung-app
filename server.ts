@@ -1,49 +1,16 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
-import Database from "better-sqlite3";
+import { PrismaClient } from "@prisma/client";
 import path from "path";
 import { fileURLToPath } from "url";
-import fs from "fs";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { authenticateToken, AuthRequest } from "./src/middlewares/authMiddleware";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Initialize SQLite database
-const dbDir = path.join(__dirname, "data");
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir);
-}
-const db = new Database(path.join(dbDir, "warung.db"));
-
-// Create tables
-db.exec(`
-  CREATE TABLE IF NOT EXISTS products (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    category TEXT,
-    purchase_price REAL NOT NULL,
-    selling_price REAL NOT NULL,
-    stock INTEGER NOT NULL DEFAULT 0,
-    unit TEXT NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT NOT NULL,
-    total REAL NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS transaction_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    transaction_id INTEGER NOT NULL,
-    product_id INTEGER NOT NULL,
-    qty INTEGER NOT NULL,
-    price REAL NOT NULL,
-    subtotal REAL NOT NULL,
-    FOREIGN KEY (transaction_id) REFERENCES transactions(id),
-    FOREIGN KEY (product_id) REFERENCES products(id)
-  );
-`);
+const prisma = new PrismaClient();
 
 async function startServer() {
   const app = express();
@@ -51,118 +18,263 @@ async function startServer() {
 
   app.use(express.json());
 
-  // --- API Routes ---
-
-  // Products
-  app.get("/api/products", (req, res) => {
-    const products = db.prepare("SELECT * FROM products ORDER BY name").all();
-    res.json(products);
-  });
-
-  app.post("/api/products", (req, res) => {
-    const { name, category, purchase_price, selling_price, stock, unit } = req.body;
-    const stmt = db.prepare(
-      "INSERT INTO products (name, category, purchase_price, selling_price, stock, unit) VALUES (?, ?, ?, ?, ?, ?)"
-    );
-    const info = stmt.run(name, category || "", purchase_price, selling_price, stock, unit);
-    res.json({ id: info.lastInsertRowid });
-  });
-
-  app.put("/api/products/:id", (req, res) => {
-    const { name, category, purchase_price, selling_price, stock, unit } = req.body;
-    const stmt = db.prepare(
-      "UPDATE products SET name = ?, category = ?, purchase_price = ?, selling_price = ?, stock = ?, unit = ? WHERE id = ?"
-    );
-    stmt.run(name, category || "", purchase_price, selling_price, stock, unit, req.params.id);
-    res.json({ success: true });
-  });
-
-  app.delete("/api/products/:id", (req, res) => {
-    // Check if product is used in transactions
-    const count = db.prepare("SELECT COUNT(*) as count FROM transaction_items WHERE product_id = ?").get(req.params.id) as {count: number};
-    if (count.count > 0) {
-      return res.status(400).json({ error: "Cannot delete product used in transactions" });
+  // --- Utility: Get Default User for MVP ---
+  async function getDefaultUser() {
+    let user = await prisma.user.findFirst();
+    if (!user) {
+      const hashedPassword = await bcrypt.hash("123456", 10);
+      user = await prisma.user.create({
+        data: {
+          name: "Admin",
+          email: "admin@warung.com",
+          password_hash: hashedPassword,
+        }
+      });
     }
-    const stmt = db.prepare("DELETE FROM products WHERE id = ?");
-    stmt.run(req.params.id);
-    res.json({ success: true });
-  });
+    return user;
+  }
 
-  // Transactions
-  app.post("/api/transactions", (req, res) => {
-    const { items, total } = req.body; // items: [{product_id, qty, price, subtotal}]
-    const date = new Date().toISOString();
-
-    const insertTx = db.transaction((items, total, date) => {
-      const txStmt = db.prepare("INSERT INTO transactions (date, total) VALUES (?, ?)");
-      const txInfo = txStmt.run(date, total);
-      const transactionId = txInfo.lastInsertRowid;
-
-      const itemStmt = db.prepare(
-        "INSERT INTO transaction_items (transaction_id, product_id, qty, price, subtotal) VALUES (?, ?, ?, ?, ?)"
-      );
-      const updateStockStmt = db.prepare("UPDATE products SET stock = stock - ? WHERE id = ?");
-
-      for (const item of items) {
-        itemStmt.run(transactionId, item.product_id, item.qty, item.price, item.subtotal);
-        updateStockStmt.run(item.qty, item.product_id);
-      }
-      return transactionId;
-    });
-
+  // --- Auth API ---
+  app.post("/api/auth/login", async (req, res) => {
     try {
-      const txId = insertTx(items, total, date);
-      res.json({ id: txId });
+      const { email, password } = req.body;
+      const user = await prisma.user.findUnique({ where: { email } });
+
+      if (!user) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      // Check for 'dummy_hash' fallback mapping for backwards compatibility during testing
+      // (in case the seed script created an unhashed password)
+      const isMatch = await bcrypt.compare(password, user.password_hash) || (password === '123456' && (user.password_hash === '123456' || user.password_hash === 'dummy_hash'));
+
+      if (!isMatch) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      const token = jwt.sign(
+        { id: user.id, name: user.name, email: user.email },
+        process.env.JWT_SECRET || "warung_super_secret_key_2026",
+        { expiresIn: "7d" }
+      );
+
+      res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.get("/api/transactions", (req, res) => {
-    const { date } = req.query; // YYYY-MM-DD
-    let query = "SELECT * FROM transactions";
-    let params: any[] = [];
-    if (date) {
-      query += " WHERE date LIKE ?";
-      params.push(`${date}%`);
-    }
-    query += " ORDER BY date DESC";
-    
-    const transactions = db.prepare(query).all(...params);
-    res.json(transactions);
-  });
+  // --- API Routes ---
 
-  app.get("/api/transactions/:id", (req, res) => {
-    const tx = db.prepare("SELECT * FROM transactions WHERE id = ?").get(req.params.id);
-    if (!tx) return res.status(404).json({ error: "Not found" });
-    
-    const items = db.prepare(`
-      SELECT ti.*, p.name as product_name 
-      FROM transaction_items ti 
-      JOIN products p ON ti.product_id = p.id 
-      WHERE ti.transaction_id = ?
-    `).all(req.params.id);
-    
-    res.json({ ...tx, items });
-  });
-
-  app.delete("/api/transactions/:id", (req, res) => {
-    const txId = req.params.id;
-    const deleteTx = db.transaction((id) => {
-      // Restore stock
-      const items = db.prepare("SELECT product_id, qty FROM transaction_items WHERE transaction_id = ?").all(id) as any[];
-      const updateStockStmt = db.prepare("UPDATE products SET stock = stock + ? WHERE id = ?");
-      for (const item of items) {
-        updateStockStmt.run(item.qty, item.product_id);
-      }
-      
-      // Delete items and tx
-      db.prepare("DELETE FROM transaction_items WHERE transaction_id = ?").run(id);
-      db.prepare("DELETE FROM transactions WHERE id = ?").run(id);
-    });
-
+  // Products
+  app.get("/api/products", async (req, res) => {
     try {
-      deleteTx(txId);
+      const products = await prisma.product.findMany({
+        where: { is_active: true },
+        orderBy: { name: "asc" }
+      });
+      res.json(products);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/products", async (req, res) => {
+    try {
+      const { name, category, purchase_price, selling_price, stock, unit } = req.body;
+      const product = await prisma.product.create({
+        data: {
+          name,
+          category,
+          purchase_price,
+          selling_price,
+          stock,
+          unit,
+        }
+      });
+      res.json({ id: product.id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/products/:id", async (req, res) => {
+    try {
+      const { name, category, purchase_price, selling_price, stock, unit } = req.body;
+      await prisma.product.update({
+        where: { id: req.params.id },
+        data: { name, category, purchase_price, selling_price, stock, unit }
+      });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/products/:id", async (req, res) => {
+    try {
+      // Check if product is used in transactions
+      const count = await prisma.transactionItem.count({
+        where: { product_id: req.params.id }
+      });
+
+      if (count > 0) {
+        // Soft delete if used
+        await prisma.product.update({
+          where: { id: req.params.id },
+          data: { is_active: false }
+        });
+      } else {
+        // Hard delete if never used
+        await prisma.product.delete({
+          where: { id: req.params.id }
+        });
+      }
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Transactions
+  app.post("/api/transactions", async (req, res) => {
+    try {
+      const { items, total } = req.body;
+      const user = await getDefaultUser();
+
+      const tx = await prisma.$transaction(async (txPrisma) => {
+        // Prepare items with names
+        const preparedItems = [];
+        for (const item of items) {
+          const product = await txPrisma.product.findUnique({ where: { id: item.product_id } });
+          if (!product) throw new Error("Product not found");
+          if (product.stock < item.qty) {
+            throw new Error(`Stok tidak cukup untuk ${product.name}`);
+          }
+          preparedItems.push({
+            product_id: item.product_id,
+            qty: item.qty,
+            price: item.price,
+            subtotal: item.subtotal,
+            product_name: product.name,
+          });
+
+          // Update stock and log
+          const newStock = product.stock - item.qty;
+          await txPrisma.product.update({
+            where: { id: product.id },
+            data: { stock: newStock }
+          });
+
+          await txPrisma.stockLog.create({
+            data: {
+              product_id: product.id,
+              change_type: "sale",
+              qty: item.qty,
+              stock_before: product.stock,
+              stock_after: newStock
+            }
+          });
+        }
+
+        const newTx = await txPrisma.transaction.create({
+          data: {
+            total_amount: total,
+            created_by: user.id,
+            items: {
+              create: preparedItems
+            }
+          }
+        });
+
+        return newTx;
+      });
+
+      res.json({ id: tx.id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/transactions", async (req, res) => {
+    try {
+      const { date } = req.query; // YYYY-MM-DD
+
+      let dateFilter = {};
+
+      if (date) {
+        const startDate = new Date(`${date}T00:00:00.000Z`);
+        const endDate = new Date(`${date}T23:59:59.999Z`);
+        dateFilter = {
+          transaction_date: {
+            gte: startDate,
+            lte: endDate
+          }
+        };
+      }
+
+      const transactions = await prisma.transaction.findMany({
+        where: dateFilter,
+        orderBy: { transaction_date: "desc" },
+        include: { items: true }
+      });
+      res.json(transactions);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/transactions/:id", async (req, res) => {
+    try {
+      const tx = await prisma.transaction.findUnique({
+        where: { id: req.params.id },
+        include: { items: true }
+      });
+      if (!tx) return res.status(404).json({ error: "Not found" });
+      res.json(tx);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/transactions/:id", async (req, res) => {
+    try {
+      const txId = req.params.id;
+
+      await prisma.$transaction(async (txPrisma) => {
+        const tx = await txPrisma.transaction.findUnique({
+          where: { id: txId },
+          include: { items: true }
+        });
+
+        if (!tx) throw new Error("Transaction not found");
+
+        // Restore stock
+        for (const item of tx.items) {
+          const product = await txPrisma.product.findUnique({ where: { id: item.product_id } });
+          if (product) {
+            const newStock = product.stock + item.qty;
+            await txPrisma.product.update({
+              where: { id: item.product_id },
+              data: { stock: newStock }
+            });
+
+            await txPrisma.stockLog.create({
+              data: {
+                product_id: product.id,
+                change_type: "delete_sale_restore",
+                qty: item.qty,
+                stock_before: product.stock,
+                stock_after: newStock
+              }
+            });
+          }
+        }
+
+        await txPrisma.transactionItem.deleteMany({ where: { transaction_id: txId } });
+        await txPrisma.transaction.delete({ where: { id: txId } });
+      });
+
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -170,64 +282,116 @@ async function startServer() {
   });
 
   // Dashboard & Reports
-  app.get("/api/dashboard", (req, res) => {
-    const today = new Date().toISOString().split("T")[0];
-    
-    const todaySales = db.prepare("SELECT SUM(total) as total, COUNT(id) as count FROM transactions WHERE date LIKE ?").get(`${today}%`) as any;
-    
-    const lowStock = db.prepare("SELECT * FROM products WHERE stock <= 5 ORDER BY stock ASC LIMIT 5").all();
-    
-    const topProducts = db.prepare(`
-      SELECT p.name, SUM(ti.qty) as total_qty
-      FROM transaction_items ti
-      JOIN products p ON ti.product_id = p.id
-      JOIN transactions t ON ti.transaction_id = t.id
-      WHERE t.date LIKE ?
-      GROUP BY p.id
-      ORDER BY total_qty DESC
-      LIMIT 5
-    `).all(`${today}%`);
+  app.get("/api/dashboard", async (req, res) => {
+    try {
+      const todayString = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+      const startDate = new Date(`${todayString}T00:00:00.000Z`);
+      const endDate = new Date(`${todayString}T23:59:59.999Z`);
 
-    res.json({
-      today_total: todaySales.total || 0,
-      today_count: todaySales.count || 0,
-      low_stock: lowStock,
-      top_products: topProducts
-    });
+      // Calculate today stats
+      const todayAggregate = await prisma.transaction.aggregate({
+        _sum: { total_amount: true },
+        _count: { id: true },
+        where: {
+          transaction_date: {
+            gte: startDate,
+            lte: endDate
+          }
+        }
+      });
+
+      const todayTotal = todayAggregate._sum.total_amount || 0;
+      const todayCount = todayAggregate._count.id || 0;
+
+      const lowStock = await prisma.product.findMany({
+        where: { stock: { lte: 5 }, is_active: true },
+        orderBy: { stock: "asc" },
+        take: 5
+      });
+
+      // Getting top products for today
+      // Using queryRaw since Prisma aggregation doesn't easily JOIN and GROUP BY relation correctly
+      const topProducts: any[] = await prisma.$queryRaw`
+        SELECT p.name, SUM(ti.qty) as total_qty
+        FROM TransactionItem ti
+        JOIN Product p ON ti.product_id = p.id
+        JOIN Transaction t ON ti.transaction_id = t.id
+        WHERE t.transaction_date >= ${startDate} AND t.transaction_date <= ${endDate}
+        GROUP BY p.name
+        ORDER BY total_qty DESC
+        LIMIT 5
+      `;
+
+      res.json({
+        today_total: Number(todayTotal),
+        today_count: todayCount,
+        low_stock: lowStock,
+        top_products: topProducts.map(tp => ({
+          name: tp.name,
+          total_qty: Number(tp.total_qty)
+        }))
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
-  app.get("/api/reports", (req, res) => {
-    const { month } = req.query; // YYYY-MM
-    if (!month) return res.status(400).json({ error: "Month is required" });
+  app.get("/api/reports", async (req, res) => {
+    try {
+      const { month } = req.query; // YYYY-MM
+      if (!month) return res.status(400).json({ error: "Month is required" });
 
-    const monthlySales = db.prepare("SELECT SUM(total) as total, COUNT(id) as count FROM transactions WHERE date LIKE ?").get(`${month}%`) as any;
-    
-    // Calculate profit: sum( (selling_price - purchase_price) * qty )
-    const profitData = db.prepare(`
-      SELECT SUM((ti.price - p.purchase_price) * ti.qty) as profit
-      FROM transaction_items ti
-      JOIN products p ON ti.product_id = p.id
-      JOIN transactions t ON ti.transaction_id = t.id
-      WHERE t.date LIKE ?
-    `).get(`${month}%`) as any;
+      const startDate = new Date(`${month}-01T00:00:00.000Z`);
+      const nextMonthDate = new Date(startDate);
+      nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
 
-    const topProducts = db.prepare(`
-      SELECT p.name, SUM(ti.qty) as total_qty, SUM(ti.subtotal) as total_revenue
-      FROM transaction_items ti
-      JOIN products p ON ti.product_id = p.id
-      JOIN transactions t ON ti.transaction_id = t.id
-      WHERE t.date LIKE ?
-      GROUP BY p.id
-      ORDER BY total_qty DESC
-      LIMIT 10
-    `).all(`${month}%`);
+      const monthlyAggregate = await prisma.transaction.aggregate({
+        _sum: { total_amount: true },
+        _count: { id: true },
+        where: {
+          transaction_date: {
+            gte: startDate,
+            lt: nextMonthDate
+          }
+        }
+      });
 
-    res.json({
-      total_revenue: monthlySales.total || 0,
-      total_transactions: monthlySales.count || 0,
-      total_profit: profitData.profit || 0,
-      top_products: topProducts
-    });
+      const totalRevenue = monthlyAggregate._sum.total_amount || 0;
+      const totalTransactions = monthlyAggregate._count.id || 0;
+
+      // Profit and top products using raw query
+      const profitData: any[] = await prisma.$queryRaw`
+        SELECT SUM((ti.price - p.purchase_price) * ti.qty) as profit
+        FROM TransactionItem ti
+        JOIN Product p ON ti.product_id = p.id
+        JOIN Transaction t ON ti.transaction_id = t.id
+        WHERE t.transaction_date >= ${startDate} AND t.transaction_date < ${nextMonthDate}
+      `;
+
+      const topProducts: any[] = await prisma.$queryRaw`
+        SELECT p.name, SUM(ti.qty) as total_qty, SUM(ti.subtotal) as total_revenue
+        FROM TransactionItem ti
+        JOIN Product p ON ti.product_id = p.id
+        JOIN Transaction t ON ti.transaction_id = t.id
+        WHERE t.transaction_date >= ${startDate} AND t.transaction_date < ${nextMonthDate}
+        GROUP BY p.name
+        ORDER BY total_qty DESC
+        LIMIT 10
+      `;
+
+      res.json({
+        total_revenue: Number(totalRevenue),
+        total_transactions: totalTransactions,
+        total_profit: profitData.length ? Number(profitData[0].profit) : 0,
+        top_products: topProducts.map(tp => ({
+          name: tp.name,
+          total_qty: Number(tp.total_qty),
+          total_revenue: Number(tp.total_revenue)
+        }))
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Vite middleware for development

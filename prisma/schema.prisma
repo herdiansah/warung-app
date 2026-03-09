@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String        @id @default(uuid())
+  name          String
+  email         String        @unique
+  password_hash String
+  created_at    DateTime      @default(now())
+  transactions  Transaction[]
+}
+
+model Product {
+  id             String            @id @default(uuid())
+  name           String
+  category       String?
+  purchase_price Decimal
+  selling_price  Decimal
+  stock          Int               @default(0)
+  unit           String
+  is_active      Boolean           @default(true)
+  created_at     DateTime          @default(now())
+  transactionItems TransactionItem[]
+  stockLogs        StockLog[]
+
+  @@index([name])
+}
+
+model Transaction {
+  id               String            @id @default(uuid())
+  transaction_date DateTime          @default(now())
+  total_amount     Decimal
+  created_by       String
+  user             User              @relation(fields: [created_by], references: [id])
+  created_at       DateTime          @default(now())
+  items            TransactionItem[]
+
+  @@index([transaction_date])
+}
+
+model TransactionItem {
+  id             String      @id @default(uuid())
+  transaction_id String
+  transaction    Transaction @relation(fields: [transaction_id], references: [id])
+  product_id     String
+  product        Product     @relation(fields: [product_id], references: [id])
+  product_name   String
+  qty            Int
+  price          Decimal
+  subtotal       Decimal
+
+  @@index([product_id])
+}
+
+model StockLog {
+  id           String    @id @default(uuid())
+  product_id   String
+  product      Product   @relation(fields: [product_id], references: [id])
+  change_type  String
+  qty          Int
+  stock_before Int
+  stock_after  Int
+  created_at   DateTime  @default(now())
+}

@@ -1,7 +1,7 @@
-import { Link, useLocation } from "react-router-dom";
-import { Home, Package, ShoppingCart, History, BarChart3 } from "lucide-react";
+import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
+import { Home, Package, ShoppingCart, History, BarChart3, LogOut } from "lucide-react";
 
-export function Layout({ children }: { children: React.ReactNode }) {
+export function Layout() {
   const location = useLocation();
 
   const navItems = [
@@ -23,9 +23,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <Link
               key={item.path}
               to={item.path}
-              className={`flex flex-col items-center p-2 rounded-xl ${
-                isActive ? "text-emerald-600" : "text-gray-500"
-              }`}
+              className={`flex flex-col items-center p-2 rounded-xl ${isActive ? "text-emerald-600" : "text-gray-500"
+                }`}
             >
               <Icon className="w-6 h-6 mb-1" />
               <span className="text-[10px] font-medium">{item.label}</span>
@@ -47,11 +46,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
-                  isActive
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${isActive
                     ? "bg-emerald-50 text-emerald-600 font-medium"
                     : "text-gray-600 hover:bg-gray-50"
-                }`}
+                  }`}
               >
                 <Icon className="w-5 h-5" />
                 <span>{item.label}</span>
@@ -62,8 +60,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </nav>
 
       {/* Main Content */}
-      <main className="flex-1 p-4 md:p-8 max-w-5xl mx-auto w-full">
-        {children}
+      <main className="flex-1 p-4 md:p-8 max-w-5xl mx-auto w-full relative">
+        <div className="absolute top-4 right-4 flex space-x-2">
+          <button
+            onClick={() => {
+              localStorage.removeItem("warung_token");
+              localStorage.removeItem("warung_user");
+              window.location.href = "/login";
+            }}
+            className="flex items-center text-sm text-gray-500 hover:text-red-500 transition-colors"
+          >
+            <LogOut size={18} className="mr-1" /> Keluar
+          </button>
+        </div>
+        <Outlet />
       </main>
     </div>
   );
