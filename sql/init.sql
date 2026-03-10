@@ -16,7 +16,7 @@
 
 
 -- Dumping database structure for kasirwarung_db
-CREATE DATABASE IF NOT EXISTS `kasirwarung_db` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+CREATE DATABASE IF NOT EXISTS `kasirwarung_db` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
 USE `kasirwarung_db`;
 
 -- Dumping structure for table kasirwarung_db.product
@@ -34,12 +34,28 @@ CREATE TABLE IF NOT EXISTS `product` (
   KEY `Product_name_idx` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Dumping data for table kasirwarung_db.product: ~4 rows (approximately)
+-- Dumping data for table kasirwarung_db.product: ~2 rows (approximately)
 INSERT INTO `product` (`id`, `name`, `category`, `purchase_price`, `selling_price`, `stock`, `unit`, `is_active`, `created_at`) VALUES
-	('0430664e-272d-45a2-9f2a-c9d25675e36c', 'Kopi Kapal Api', 'Minuman', 1000.000000000000000000000000000000, 1500.000000000000000000000000000000, 100, 'BKS', 1, '2026-03-09 15:38:53.207'),
-	('4abf31a1-7ae3-430b-bae7-dd74dc34d6f1', 'Telur Ayam 1kg', 'Sembako', 26000.000000000000000000000000000000, 29000.000000000000000000000000000000, 15, 'KG', 1, '2026-03-09 15:38:53.205'),
-	('57e08c90-e4f2-47b6-bbe6-a345394a370d', 'Indomie Goreng', 'Makanan', 2500.000000000000000000000000000000, 3500.000000000000000000000000000000, 50, 'BKS', 1, '2026-03-09 15:38:53.192'),
-	('8b7983b4-d8dc-4089-b105-8cac3666f5d1', 'Beras Mentik 5kg', 'Sembako', 60000.000000000000000000000000000000, 65000.000000000000000000000000000000, 10, 'SAK', 1, '2026-03-09 15:38:53.201');
+	('4856db6a-6057-4c93-972f-95867adf55cb', 'Kopi Kapal Api', 'Minuman', 1000.000000000000000000000000000000, 1500.000000000000000000000000000000, 99, 'BKS', 0, '2026-03-10 15:23:05.710'),
+	('6fe3520c-95a8-4ece-b169-ef9e6cbf2045', 'Beras Mentik 5kg', 'Sembako', 60000.000000000000000000000000000000, 67000.000000000000000000000000000000, 10, 'SAK', 1, '2026-03-10 15:23:05.707'),
+	('77bbce5b-24ec-49b3-9351-1c8d110d6212', 'Telur Bebek', 'Sembako', 10000.000000000000000000000000000000, 12000.000000000000000000000000000000, 9, 'kg', 1, '2026-03-10 15:30:57.572'),
+	('9281e27b-e040-4fdc-a44d-bcf397dcae40', 'Telur Puyuh 1kg', 'Sembako', 10000.000000000000000000000000000000, 11000.000000000000000000000000000000, 9, 'kg', 1, '2026-03-10 15:36:29.747'),
+	('a020d8db-388b-468b-bcf0-1f3e62c0379f', 'Kopi Kapal Api', 'Sembako', 2500.000000000000000000000000000000, 3500.000000000000000000000000000000, 10, 'pcs', 1, '2026-03-10 16:14:46.232'),
+	('d8346483-64d2-4dd9-b8bf-b5a6b536c40e', 'Indomie Goreng', 'Makanan', 2500.000000000000000000000000000000, 3500.000000000000000000000000000000, 47, 'BKS', 0, '2026-03-10 15:23:05.703'),
+	('ebdd439e-0dcb-478a-be64-a8f5bfab07d4', 'Telur Ayam 1kg', 'Sembako', 26000.000000000000000000000000000000, 29000.000000000000000000000000000000, 14, 'KG', 1, '2026-03-10 15:23:05.709');
+
+-- Dumping structure for table kasirwarung_db.setting
+CREATE TABLE IF NOT EXISTS `setting` (
+  `key` varchar(191) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `value` varchar(191) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `updated_at` datetime(3) NOT NULL,
+  PRIMARY KEY (`key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Dumping data for table kasirwarung_db.setting: ~2 rows (approximately)
+INSERT INTO `setting` (`key`, `value`, `updated_at`) VALUES
+	('low_stock_threshold', '5', '2026-03-10 16:10:23.867'),
+	('min_margin_percent', '10', '2026-03-10 16:10:23.907');
 
 -- Dumping structure for table kasirwarung_db.stocklog
 CREATE TABLE IF NOT EXISTS `stocklog` (
@@ -56,6 +72,23 @@ CREATE TABLE IF NOT EXISTS `stocklog` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Dumping data for table kasirwarung_db.stocklog: ~0 rows (approximately)
+INSERT INTO `stocklog` (`id`, `product_id`, `change_type`, `qty`, `stock_before`, `stock_after`, `created_at`) VALUES
+	('07b733bf-2a46-4e8b-82a7-e3f9326c5305', '4856db6a-6057-4c93-972f-95867adf55cb', 'delete_sale_restore', 1, 98, 99, '2026-03-10 16:12:14.205'),
+	('0df7a14e-7ad8-40fd-bf0c-a192b1e1fa68', '9281e27b-e040-4fdc-a44d-bcf397dcae40', 'initial_stock', 10, 0, 10, '2026-03-10 15:36:29.750'),
+	('0f662854-1606-4c1c-a9c1-59a5f9feeb55', '6fe3520c-95a8-4ece-b169-ef9e6cbf2045', 'sale', 2, 9, 7, '2026-03-10 15:39:47.415'),
+	('1216b43c-7f9b-48e2-aded-5c9701eab316', 'ebdd439e-0dcb-478a-be64-a8f5bfab07d4', 'sale', 1, 11, 10, '2026-03-10 15:55:29.606'),
+	('13bf7cea-1832-433e-8030-7b68f3562479', '6fe3520c-95a8-4ece-b169-ef9e6cbf2045', 'delete_sale_restore', 1, 7, 8, '2026-03-10 15:40:05.178'),
+	('25b1c8d0-97df-46f9-b5d3-8d3fc1fdcd0d', '77bbce5b-24ec-49b3-9351-1c8d110d6212', 'sale', 1, 10, 9, '2026-03-10 16:08:24.152'),
+	('5cee75a4-a5f2-42f4-83c7-f77d9c3196d1', '6fe3520c-95a8-4ece-b169-ef9e6cbf2045', 'delete_sale_restore', 2, 8, 10, '2026-03-10 16:12:14.211'),
+	('7ef7253c-ae7a-41b6-acc1-52fc7e46a1a3', '6fe3520c-95a8-4ece-b169-ef9e6cbf2045', 'sale', 1, 10, 9, '2026-03-10 15:38:38.701'),
+	('8d4130b2-113c-43fb-9788-beb50f7ab0e5', '77bbce5b-24ec-49b3-9351-1c8d110d6212', 'initial_stock', 10, 0, 10, '2026-03-10 15:30:57.575'),
+	('9806909c-93e7-47d0-9984-c7dc211eb1f9', 'd8346483-64d2-4dd9-b8bf-b5a6b536c40e', 'sale', 3, 50, 47, '2026-03-10 15:55:29.595'),
+	('98f68d78-0f0c-4d90-a5d4-0a14a79fcb05', '9281e27b-e040-4fdc-a44d-bcf397dcae40', 'sale', 1, 10, 9, '2026-03-10 16:08:24.144'),
+	('9b3e53c2-c4d9-4ed2-861b-be8c412db818', 'ebdd439e-0dcb-478a-be64-a8f5bfab07d4', 'sale', 4, 15, 11, '2026-03-10 15:39:47.420'),
+	('a1ac5af8-2fa6-4096-aff0-f0a4e8f15614', '4856db6a-6057-4c93-972f-95867adf55cb', 'sale', 1, 99, 98, '2026-03-10 15:55:29.601'),
+	('de2de885-69e3-4e72-bf8c-74ef6c3f9458', 'a020d8db-388b-468b-bcf0-1f3e62c0379f', 'initial_stock', 10, 0, 10, '2026-03-10 16:14:46.233'),
+	('e6c64f08-e7a0-4c7e-9242-2fa8f1b246a9', 'ebdd439e-0dcb-478a-be64-a8f5bfab07d4', 'delete_sale_restore', 4, 10, 14, '2026-03-10 16:12:14.215'),
+	('ea9101d8-2f31-4533-846b-846d311e2823', '4856db6a-6057-4c93-972f-95867adf55cb', 'sale', 1, 100, 99, '2026-03-10 15:39:47.410');
 
 -- Dumping structure for table kasirwarung_db.transaction
 CREATE TABLE IF NOT EXISTS `transaction` (
@@ -71,6 +104,9 @@ CREATE TABLE IF NOT EXISTS `transaction` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Dumping data for table kasirwarung_db.transaction: ~0 rows (approximately)
+INSERT INTO `transaction` (`id`, `transaction_date`, `total_amount`, `created_by`, `created_at`) VALUES
+	('45adc16e-a15d-4053-be63-b0b5991d7654', '2026-03-10 15:55:29.608', 41000.000000000000000000000000000000, '155b0c33-c7d6-4201-8d38-bc2132bc9029', '2026-03-10 15:55:29.608'),
+	('82721dbd-e2e6-4d09-87ed-43bef8f2ca98', '2026-03-10 16:08:24.155', 23000.000000000000000000000000000000, '155b0c33-c7d6-4201-8d38-bc2132bc9029', '2026-03-10 16:08:24.155');
 
 -- Dumping structure for table kasirwarung_db.transactionitem
 CREATE TABLE IF NOT EXISTS `transactionitem` (
@@ -89,6 +125,12 @@ CREATE TABLE IF NOT EXISTS `transactionitem` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Dumping data for table kasirwarung_db.transactionitem: ~0 rows (approximately)
+INSERT INTO `transactionitem` (`id`, `transaction_id`, `product_id`, `product_name`, `qty`, `price`, `subtotal`) VALUES
+	('010e940c-c450-4827-ad08-fa3318be7c7f', '82721dbd-e2e6-4d09-87ed-43bef8f2ca98', '9281e27b-e040-4fdc-a44d-bcf397dcae40', 'Telur Puyuh 1kg', 1, 11000.000000000000000000000000000000, 11000.000000000000000000000000000000),
+	('1cfbbea8-8492-4a84-abc8-1d7eed542d51', '82721dbd-e2e6-4d09-87ed-43bef8f2ca98', '77bbce5b-24ec-49b3-9351-1c8d110d6212', 'Telur Bebek', 1, 12000.000000000000000000000000000000, 12000.000000000000000000000000000000),
+	('2067e1c9-1984-4d0b-93b9-cb33b48df72b', '45adc16e-a15d-4053-be63-b0b5991d7654', 'ebdd439e-0dcb-478a-be64-a8f5bfab07d4', 'Telur Ayam 1kg', 1, 29000.000000000000000000000000000000, 29000.000000000000000000000000000000),
+	('90a1f7d6-be7a-4836-b3e7-dc3a97c61bf2', '45adc16e-a15d-4053-be63-b0b5991d7654', 'd8346483-64d2-4dd9-b8bf-b5a6b536c40e', 'Indomie Goreng', 3, 3500.000000000000000000000000000000, 10500.000000000000000000000000000000),
+	('c9f6b597-0f6e-4bce-9a60-a3a233806718', '45adc16e-a15d-4053-be63-b0b5991d7654', '4856db6a-6057-4c93-972f-95867adf55cb', 'Kopi Kapal Api', 1, 1500.000000000000000000000000000000, 1500.000000000000000000000000000000);
 
 -- Dumping structure for table kasirwarung_db.user
 CREATE TABLE IF NOT EXISTS `user` (
@@ -101,26 +143,9 @@ CREATE TABLE IF NOT EXISTS `user` (
   UNIQUE KEY `User_email_key` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Dumping data for table kasirwarung_db.user: ~1 rows (approximately)
+-- Dumping data for table kasirwarung_db.user: ~0 rows (approximately)
 INSERT INTO `user` (`id`, `name`, `email`, `password_hash`, `created_at`) VALUES
-	('fb4c28de-89fc-4902-b2c1-329408524286', 'Owner', 'admin@warung.com', '123456', '2026-03-09 15:38:53.165');
-
--- Dumping structure for table kasirwarung_db._prisma_migrations
-CREATE TABLE IF NOT EXISTS `_prisma_migrations` (
-  `id` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `checksum` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `finished_at` datetime(3) DEFAULT NULL,
-  `migration_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `logs` text COLLATE utf8mb4_unicode_ci,
-  `rolled_back_at` datetime(3) DEFAULT NULL,
-  `started_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  `applied_steps_count` int unsigned NOT NULL DEFAULT '0',
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Dumping data for table kasirwarung_db._prisma_migrations: ~1 rows (approximately)
-INSERT INTO `_prisma_migrations` (`id`, `checksum`, `finished_at`, `migration_name`, `logs`, `rolled_back_at`, `started_at`, `applied_steps_count`) VALUES
-	('f3c2a634-a693-4130-bc93-35689354ea4f', 'b5b1497f412cf7700f0753b080efae8c772ea97d85d93359d716bab946378229', '2026-03-09 15:35:50.803', '20260309153550_init_schema', NULL, NULL, '2026-03-09 15:35:50.532', 1);
+	('155b0c33-c7d6-4201-8d38-bc2132bc9029', 'Owner', 'admin@warung.com', '123456', '2026-03-10 15:23:05.697');
 
 /*!40103 SET TIME_ZONE=IFNULL(@OLD_TIME_ZONE, 'system') */;
 /*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;
