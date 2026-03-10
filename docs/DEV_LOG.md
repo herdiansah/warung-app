@@ -45,6 +45,27 @@
 
 *[Newest entries at the top]*
 
+### Session 12 - 2026-03-11 - Architect Agent
+
+**Time:** Start: 05:43 | End: 05:45 | Duration: 2 mins
+
+**Tasks Completed:**
+- [Phase 1.1] Buat `README.md` proyek — Memperbarui file README agar mencerminkan fungsionalitas aplikasi Warung Sales Record, tech stack (React, Vite, Tailwind, Express, Prisma), panduan instalasi, dan struktur proyek mutakhir.
+
+**Code Changes:**
+- Files modified: `README.md`, `docs/TASK_LIST.md`, `docs/DEV_LOG.md`.
+- Lines of code: ~100
+- Key implementations: Dokumentasi menyeluruh MVP, instalasi, dan referensi file docs.
+
+**Issues Encountered:**
+- Issue: None
+- Solution: N/A
+
+**Next Session Plan:**
+- Tasks to continue: Penyelesaian Technical Debt atau Pipeline Deployment.
+
+---
+
 ### Session 11 - 2026-03-10 - Logging & Error Handling Agent
 
 **Time:** Start: 23:00 | End: 23:10 | Duration: 10 mins

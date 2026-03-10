@@ -85,6 +85,7 @@
 ## ✅ Completed Tasks (From Backlog)
 
 *[Tasks that were in backlog but have been completed]*
+- [x] Phase 1.1: Buat README.md proyek
 - [x] Phase 1.1: Database env implementation
 - [x] Phase 2.1: Prisma Schema implementation
 - [x] Phase 2.2: Initial Migration dan Seed data

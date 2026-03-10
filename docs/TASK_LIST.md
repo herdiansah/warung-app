@@ -50,7 +50,7 @@ Update sesuai kondisi:
 - [x] Konfigurasi Prisma ORM
 - [x] Setup environment variables (`.env`)
 - [ ] Setup ESLint & Prettier
-- [ ] Buat `README.md` proyek
+- [x] Buat `README.md` proyek
 
 ### 1.2 — Struktur Folder 🏗️ Architect Agent
 - [ ] Definisikan struktur folder frontend (`/pages`, `/components`, `/lib`, `/store`)
