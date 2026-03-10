@@ -6,6 +6,8 @@ import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { authenticateToken, AuthRequest } from "./src/middlewares/authMiddleware";
+import { requestLogger, globalErrorHandler } from "./src/middlewares/errorHandler";
+import { logger } from "./src/utils/logger";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,6 +19,7 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+  app.use(requestLogger);
 
   // --- Utility: Get Default User for MVP ---
   async function getDefaultUser() {
@@ -58,8 +61,49 @@ async function startServer() {
         { expiresIn: "7d" }
       );
 
+      logger.success("User logged in", { email: user.email });
       res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
     } catch (err: any) {
+      logger.error("Login failed", { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- Helper: Get Setting (key-value) ---
+  async function getSetting(key: string, defaultValue: string): Promise<string> {
+    const row = await prisma.setting.findUnique({ where: { key } });
+    return row?.value ?? defaultValue;
+  }
+
+  // --- Settings API (Phase 9.2 - Generic Key-Value) ---
+  app.get("/api/settings", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const settings = await prisma.setting.findMany();
+      const result: Record<string, string> = {};
+      for (const s of settings) {
+        result[s.key] = s.value;
+      }
+      res.json(result);
+    } catch (err: any) {
+      logger.error("GET /api/settings failed", { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/settings", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const updates: Record<string, string> = req.body;
+
+      for (const [key, value] of Object.entries(updates)) {
+        await prisma.setting.upsert({
+          where: { key },
+          create: { key, value: String(value) },
+          update: { value: String(value) }
+        });
+      }
+      res.json({ success: true });
+    } catch (err: any) {
+      logger.error("PUT /api/settings failed", { error: err.message });
       res.status(500).json({ error: err.message });
     }
   });
@@ -67,7 +111,7 @@ async function startServer() {
   // --- API Routes ---
 
   // Products
-  app.get("/api/products", async (req, res) => {
+  app.get("/api/products", authenticateToken, async (req, res) => {
     try {
       const products = await prisma.product.findMany({
         where: { is_active: true },
@@ -75,43 +119,95 @@ async function startServer() {
       });
       res.json(products);
     } catch (err: any) {
+      logger.error("GET /api/products failed", { error: err.message });
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.post("/api/products", async (req, res) => {
+  app.post("/api/products", authenticateToken, async (req, res) => {
     try {
       const { name, category, purchase_price, selling_price, stock, unit } = req.body;
-      const product = await prisma.product.create({
-        data: {
-          name,
-          category,
-          purchase_price,
-          selling_price,
-          stock,
-          unit,
+
+      // Basic validation Phase 4.1
+      if (!name) return res.status(400).json({ error: "Nama produk wajib diisi" });
+      if (purchase_price < 0 || selling_price <= 0) return res.status(400).json({ error: "Harga harus lebih besar dari 0" });
+      if (stock < 0) return res.status(400).json({ error: "Stok tidak boleh kurang dari 0" });
+
+      const product = await prisma.$transaction(async (txPrisma) => {
+        const newProduct = await txPrisma.product.create({
+          data: {
+            name,
+            category,
+            purchase_price,
+            selling_price,
+            stock,
+            unit,
+          }
+        });
+
+        if (stock > 0) {
+          await txPrisma.stockLog.create({
+            data: {
+              product_id: newProduct.id,
+              change_type: "initial_stock",
+              qty: stock,
+              stock_before: 0,
+              stock_after: stock
+            }
+          });
         }
+
+        return newProduct;
       });
+      logger.success("Product created", { id: product.id, name: req.body.name });
       res.json({ id: product.id });
     } catch (err: any) {
+      logger.error("POST /api/products failed", { error: err.message, body: req.body });
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.put("/api/products/:id", async (req, res) => {
+  app.put("/api/products/:id", authenticateToken, async (req, res) => {
     try {
       const { name, category, purchase_price, selling_price, stock, unit } = req.body;
-      await prisma.product.update({
-        where: { id: req.params.id },
-        data: { name, category, purchase_price, selling_price, stock, unit }
+
+      // Basic validation Phase 4.1
+      if (!name) return res.status(400).json({ error: "Nama produk wajib diisi" });
+      if (purchase_price < 0 || selling_price <= 0) return res.status(400).json({ error: "Harga harus lebih besar dari 0" });
+      if (stock < 0) return res.status(400).json({ error: "Stok tidak boleh kurang dari 0" });
+
+      const productId = req.params.id;
+
+      await prisma.$transaction(async (txPrisma) => {
+        const existingProduct = await txPrisma.product.findUnique({ where: { id: productId } });
+        if (!existingProduct) throw new Error("Product not found");
+
+        await txPrisma.product.update({
+          where: { id: productId },
+          data: { name, category, purchase_price, selling_price, stock, unit }
+        });
+
+        if (existingProduct.stock !== stock) {
+          await txPrisma.stockLog.create({
+            data: {
+              product_id: productId,
+              change_type: "update_product",
+              qty: Math.abs(stock - existingProduct.stock),
+              stock_before: existingProduct.stock,
+              stock_after: stock
+            }
+          });
+        }
       });
+      logger.success("Product updated", { id: productId, name });
       res.json({ success: true });
     } catch (err: any) {
+      logger.error("PUT /api/products/:id failed", { id: req.params.id, error: err.message });
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.delete("/api/products/:id", async (req, res) => {
+  app.delete("/api/products/:id", authenticateToken, async (req, res) => {
     try {
       // Check if product is used in transactions
       const count = await prisma.transactionItem.count({
@@ -119,7 +215,7 @@ async function startServer() {
       });
 
       if (count > 0) {
-        // Soft delete if used
+        // Soft delete if used: Return error as per PRD.md ("tolak jika ada transaksi" ? Actually logic was already soft delete, let's update it based on task list: "tolak jika ada transaksi" or soft delete? Task List says: soft delete (is_active = false, tolak jika ada transaksi) - if it says both, maybe it means just soft delete or reject the delete. Let's soft delete.)
         await prisma.product.update({
           where: { id: req.params.id },
           data: { is_active: false }
@@ -130,32 +226,41 @@ async function startServer() {
           where: { id: req.params.id }
         });
       }
+      logger.success("Product deleted", { id: req.params.id, soft: count > 0 });
       res.json({ success: true });
     } catch (err: any) {
+      logger.error("DELETE /api/products/:id failed", { id: req.params.id, error: err.message });
       res.status(500).json({ error: err.message });
     }
   });
 
   // Transactions
-  app.post("/api/transactions", async (req, res) => {
+  app.post("/api/transactions", authenticateToken, async (req: AuthRequest, res) => {
     try {
-      const { items, total } = req.body;
-      const user = await getDefaultUser();
+      const { items } = req.body;
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
       const tx = await prisma.$transaction(async (txPrisma) => {
-        // Prepare items with names
+        // Prepare items with names and calculate server-side totals
         const preparedItems = [];
+        let calculatedTotal = 0;
+
         for (const item of items) {
           const product = await txPrisma.product.findUnique({ where: { id: item.product_id } });
           if (!product) throw new Error("Product not found");
           if (product.stock < item.qty) {
             throw new Error(`Stok tidak cukup untuk ${product.name}`);
           }
+
+          const subtotal = Number(product.selling_price) * Number(item.qty);
+          calculatedTotal += subtotal;
+
           preparedItems.push({
             product_id: item.product_id,
-            qty: item.qty,
-            price: item.price,
-            subtotal: item.subtotal,
+            qty: Number(item.qty),
+            price: Number(product.selling_price),
+            subtotal: subtotal,
             product_name: product.name,
           });
 
@@ -179,8 +284,8 @@ async function startServer() {
 
         const newTx = await txPrisma.transaction.create({
           data: {
-            total_amount: total,
-            created_by: user.id,
+            total_amount: calculatedTotal,
+            created_by: userId,
             items: {
               create: preparedItems
             }
@@ -190,13 +295,15 @@ async function startServer() {
         return newTx;
       });
 
+      logger.success("Transaction created", { id: tx.id, items: items.length });
       res.json({ id: tx.id });
     } catch (err: any) {
+      logger.error("POST /api/transactions failed", { error: err.message });
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.get("/api/transactions", async (req, res) => {
+  app.get("/api/transactions", authenticateToken, async (req, res) => {
     try {
       const { date } = req.query; // YYYY-MM-DD
 
@@ -220,11 +327,12 @@ async function startServer() {
       });
       res.json(transactions);
     } catch (err: any) {
+      logger.error("GET /api/transactions failed", { error: err.message });
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.get("/api/transactions/:id", async (req, res) => {
+  app.get("/api/transactions/:id", authenticateToken, async (req, res) => {
     try {
       const tx = await prisma.transaction.findUnique({
         where: { id: req.params.id },
@@ -233,11 +341,12 @@ async function startServer() {
       if (!tx) return res.status(404).json({ error: "Not found" });
       res.json(tx);
     } catch (err: any) {
+      logger.error("GET /api/transactions/:id failed", { id: req.params.id, error: err.message });
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.delete("/api/transactions/:id", async (req, res) => {
+  app.delete("/api/transactions/:id", authenticateToken, async (req, res) => {
     try {
       const txId = req.params.id;
 
@@ -275,15 +384,86 @@ async function startServer() {
         await txPrisma.transaction.delete({ where: { id: txId } });
       });
 
+      logger.success("Transaction deleted & stock restored", { id: txId });
       res.json({ success: true });
     } catch (err: any) {
+      logger.error("DELETE /api/transactions/:id failed", { id: req.params.id, error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Stock Management
+  app.get("/api/stocks/history", authenticateToken, async (req, res) => {
+    try {
+      const logs = await prisma.stockLog.findMany({
+        include: { product: true },
+        orderBy: { created_at: "desc" }
+      });
+      res.json(logs);
+    } catch (err: any) {
+      logger.error("GET /api/stocks/history failed", { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/stocks/adjust", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const { product_id, diff, reason } = req.body; // diff can be + or -
+      if (!product_id || typeof diff !== 'number') {
+        return res.status(400).json({ error: "Invalid adjustment request" });
+      }
+
+      await prisma.$transaction(async (txPrisma) => {
+        const product = await txPrisma.product.findUnique({ where: { id: product_id } });
+        if (!product) throw new Error("Product not found");
+
+        const newStock = product.stock + diff;
+        if (newStock < 0) throw new Error("Stok tidak bisa negatif");
+
+        await txPrisma.product.update({
+          where: { id: product_id },
+          data: { stock: newStock }
+        });
+
+        await txPrisma.stockLog.create({
+          data: {
+            product_id,
+            change_type: reason || "manual",
+            qty: Math.abs(diff),
+            stock_before: product.stock,
+            stock_after: newStock
+          }
+        });
+      });
+
+      logger.success("Stock adjusted", { product_id, diff, reason });
+      res.json({ success: true });
+    } catch (err: any) {
+      logger.error("POST /api/stocks/adjust failed", { product_id: req.body?.product_id, error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/stocks/low", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const threshold = parseInt(await getSetting("low_stock_threshold", "5"));
+
+      const products = await prisma.product.findMany({
+        where: { stock: { lte: threshold }, is_active: true },
+        orderBy: { stock: "asc" }
+      });
+      res.json(products);
+    } catch (err: any) {
+      logger.error("GET /api/stocks/low failed", { error: err.message });
       res.status(500).json({ error: err.message });
     }
   });
 
   // Dashboard & Reports
-  app.get("/api/dashboard", async (req, res) => {
+  app.get("/api/dashboard", authenticateToken, async (req: AuthRequest, res) => {
     try {
+      const threshold = parseInt(await getSetting("low_stock_threshold", "5"));
+
       const todayString = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
       const startDate = new Date(`${todayString}T00:00:00.000Z`);
       const endDate = new Date(`${todayString}T23:59:59.999Z`);
@@ -304,7 +484,7 @@ async function startServer() {
       const todayCount = todayAggregate._count.id || 0;
 
       const lowStock = await prisma.product.findMany({
-        where: { stock: { lte: 5 }, is_active: true },
+        where: { stock: { lte: threshold }, is_active: true },
         orderBy: { stock: "asc" },
         take: 5
       });
@@ -332,11 +512,12 @@ async function startServer() {
         }))
       });
     } catch (err: any) {
+      logger.error("GET /api/dashboard failed", { error: err.message });
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.get("/api/reports", async (req, res) => {
+  app.get("/api/reports", authenticateToken, async (req, res) => {
     try {
       const { month } = req.query; // YYYY-MM
       if (!month) return res.status(400).json({ error: "Month is required" });
@@ -390,9 +571,13 @@ async function startServer() {
         }))
       });
     } catch (err: any) {
+      logger.error("GET /api/reports failed", { month: req.query.month, error: err.message });
       res.status(500).json({ error: err.message });
     }
   });
+
+  // Global Error Handler (must be after all routes, before Vite)
+  app.use(globalErrorHandler);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
@@ -409,7 +594,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    logger.info(`Server running on http://localhost:${PORT}`);
   });
 }
 

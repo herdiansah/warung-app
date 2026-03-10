@@ -45,6 +45,205 @@
 
 *[Newest entries at the top]*
 
+### Session 11 - 2026-03-10 - Logging & Error Handling Agent
+
+**Time:** Start: 23:00 | End: 23:10 | Duration: 10 mins
+
+**Tasks Completed:**
+- [Phase 10.1] Backend Logging — Menambahkan `logger.error()` di semua `catch` block yang sebelumnya hanya return JSON error tanpa log. Endpoint yang di-cover: `/api/settings` (GET/PUT), `/api/products` (GET/POST/PUT/DELETE), `/api/transactions` (GET/GET:id/POST/DELETE), `/api/stocks/history`, `/api/stocks/adjust`, `/api/stocks/low`, `/api/dashboard`, `/api/reports`.
+- [Phase 10.1] Backend logging event sudah lengkap: `logger.success()` untuk create/update/delete, `logger.error()` untuk semua kegagalan, `requestLogger` middleware mencatat setiap HTTP request.
+- [Phase 10.2] Frontend Retry Mechanism — Menambahkan state `checkoutError` dan `retryCount` di `POS.tsx`. Ketika checkout gagal: (1) banner merah muncul dengan pesan error + info percobaan ke-N, (2) tombol berubah warna orange-red dengan label "Coba Lagi", (3) keranjang tetap tersimpan sehingga user tidak perlu input ulang.
+
+**Code Changes:**
+- Files modified: `server.ts`, `src/pages/POS.tsx`, `docs/TASK_LIST.md`, `docs/DEV_LOG.md`, `docs/BACK_LOG.md`.
+
+**Next Session Plan:**
+- Tasks to continue: Phase 11 (Testing & QA)
+
+---
+
+### Session 10 - 2026-03-10 - UI/UX Polish Agent
+
+**Time:** Start: 22:41 | End: 22:50 | Duration: 9 mins
+
+**Tasks Completed:**
+- [Phase 9.1] Full UI/UX Polish across 7 files:
+  - `index.html`: SEO meta tags, Google Font Inter, Indonesian locale, mobile viewport.
+  - `index.css`: Design system CSS (Inter font, custom scrollbar, focus rings, toast animations, number input cleanup).
+  - `Layout.tsx`: Glassmorphism mobile nav, gradient brand logo, sidebar user footer with avatar, active dot indicator, hover micro-animations.
+  - `Login.tsx`: Emerald gradient theme (was indigo), show/hide password toggle, gradient CTA button, version footer.
+  - `Dashboard.tsx`: Skeleton loading state, error state with retry button, gradient icon cards, medal-style top product ranking, null-safe rendering.
+  - `POS.tsx`: Sends only `product_id+qty` to backend (cleaner payload), gradient cart header with item badge, compact card layout, loading spinner on checkout.
+  - Brand consistency: All pages now use emerald color scheme.
+
+**Code Changes:**
+- Files rewritten: `index.html`, `src/index.css`, `src/components/Layout.tsx`, `src/pages/Login.tsx`, `src/pages/Dashboard.tsx`, `src/pages/POS.tsx`.
+
+---
+
+### Session 9 - 2026-03-10 - Validation & UX Agent
+
+**Time:** Start: 22:30 | End: 22:35 | Duration: 5 mins
+
+**Tasks Completed:**
+- [Phase 9] Refactor tabel Setting ke pola **Key-Value** generik (schema: `key String @id, value String`) agar bisa menambah konfigurasi baru tanpa migrasi.
+- Menambahkan parameter baru `min_margin_percent` (default 10%) sebagai contoh fitur extensible.
+- Implementasi **real-time margin validation** pada form Tambah/Edit Produk:
+  - Menampilkan indikator margin (%) dan keuntungan per unit (Rp) secara live saat user mengetik harga.
+  - Menampilkan **warning banner kuning** dengan icon ⚠️ jika margin di bawah threshold yang di-set di Settings.
+  - Contoh: Harga beli 10.000 & harga jual 10.500 = margin 5% → Warning muncul karena < 10%.
+
+**Code Changes:**
+- Files modified: `prisma/schema.prisma`, `prisma/seed.ts`, `server.ts`, `src/pages/Products.tsx`, `src/pages/Settings.tsx`.
+
+---
+
+### Session 8 - 2026-03-10 - DB Refactor Agent
+
+**Time:** Start: 22:15 | End: 22:20 | Duration: 5 mins
+
+**Tasks Completed:**
+- Memisahkan kolom `low_stock_threshold` dari tabel `User` menjadi tabel mandiri `Setting` untuk desain yang logis dan *extensible* (fleksibel).
+- Menerapkan fungsi `upsert` pada `PUT /api/settings` untuk memastikan hanya ada satu konfigurasi universal yang dipakai / di-_update_.
+
+**Code Changes:**
+- Files modified: `prisma/schema.prisma`, `server.ts`. 
+
+**Next Session Plan:**
+- Sinkronisasi UI/UX (Phase 9.1).
+
+---
+
+### Session 7 - 2026-03-10 - Features Enhancement Agent
+
+**Time:** Start: 22:05 | End: 22:15 | Duration: 10 mins
+
+**Tasks Completed:**
+- [Phase 9] User Settings & Configuration (New)
+- Menambahkan kapabilitas bagi User untuk mengganti *Batas/Threshold Limit* Produk Hampir Habis (awalnya **statis/hardcoded** 5 pcs).
+- Memodifikasi DB Schema untuk `User` dengan penambahan kolom `low_stock_threshold Int @default(5)`.
+- Mengimplementasikan `GET /api/settings` dan `PUT /api/settings` di layer express.
+- Melakukan modifikasi query pada parameter filter API Dasboard.
+- Integrasi ke Form UI melalui Endpoint `Settings.tsx`.
+
+**Code Changes:**
+- Files modified: `prisma/schema.prisma`, `server.ts`, `src/App.tsx`, `src/components/Layout.tsx`, `docs/TASK_LIST.md`.
+- Files created: `src/pages/Settings.tsx`.
+
+**Issues Encountered:**
+- Issue: Gagal update schema saat terminal Prisma dan TS-Node Server menyala secara paralel/bersamaan. Berakhir Error `EPERM rename windows.dll.node`.
+- Solution: Mematikan TS-Node secara paksa (`npx kill-port 3000`) sebelum menggunakan `prisma db push` dan `prisma generate`, lalu merestart Service API Express-nya.
+
+**Next Session Plan:**
+- Tasks to continue: Penyempurnaan styling umum & Global Error Handlers.
+
+---
+
+### Session 6 - 2026-03-10 - Security & Frontend Agent
+
+**Time:** Start: 21:56 | End: 22:00 | Duration: 5 mins
+
+**Tasks Completed:**
+- [Phase 7 & 8] JWT Route Protection on Dashboard and Reports: Endpoint `/api/dashboard` dan `/api/reports` sekarang dimandatorikan menggunakan auth Middleware.
+- Fetch Request Updates di Frontend `Dashboard.tsx` & `Reports.tsx` kini berhasil melampirkan *bearer token* `warung_token`.
+
+**Code Changes:**
+- Files modified: `server.ts`, `src/pages/Dashboard.tsx`, `src/pages/Reports.tsx`, `docs/TASK_LIST.md`, `docs/BACK_LOG.md`.
+- Lines of code: ~30
+
+**Issues Encountered:**
+- Issue: Rata-rata component *fetch* page bawaan sebelumnya ditulis tidak terproteksi (`/api/dashboard` dan `/api/reports`). Ini berisiko terhadap public scraping.
+- Solution: Menyisipkan middleware `authenticateToken` pada endpoint API dan mengubah opsi `headers` pada frontend *effects*.
+
+**Next Session Plan:**
+- Tasks to continue: Phase 9 (UI/UX Polish) & Phase 10 (Logging & Global Error Handlers).
+
+---
+
+### Session 5 - 2026-03-10 - UI & Logistics Agent
+
+**Time:** Start: 21:40 | End: 21:50 | Duration: 10 mins
+
+**Tasks Completed:**
+- [Phase 6.1] Backend Stock API: Endpoint `/api/stocks/history`, `/api/stocks/adjust`, `/api/stocks/low` dengan Prisma Transaction agar sinkron.
+- [Phase 6.2] Frontend Stock Control: Tambah tab filter dinamis (Daftar Produk / Riwayat Stok) pada `Products.tsx`, inline control +- pada stok card, serta component baru `StockHistoryTab`.
+
+**Code Changes:**
+- Files created: `src/components/StockHistoryTab.tsx`
+- Files modified: `server.ts`, `src/pages/Products.tsx`, `docs/TASK_LIST.md`, `docs/BACK_LOG.md`.
+- Lines of code: ~160
+- Key implementations: JSX Inline-Tab Switching. API POST `/stocks/adjust` untuk pencatatan manipulasi stok (Restorasi, Update Manual, Pembelian). Logic filter array state Prisma ke Frontend render.
+
+**Issues Encountered:**
+- Issue: Integrasi manual Tab memerlukan component extraction supaya `Products.tsx` tidak terlalu penuh & berantakan (Spaghetti Code).
+- Solution: Membuat JSX independen `StockHistoryTab.tsx` dan memasang prop logic list array mandiri di dalam tab component.
+- Issue: (Hotfix) BUG: Saat pengguna melakukan edit produk dan mengubah stok secara spesifik lewat *Modal Panel Formulir* `Products.tsx`, history perubahannya tidak kecatat di Riwayat Stok. Modul yang mencatat riwayat sebelumnya hanyalah tombol (+ / -) Opname.
+- Solution: Menuliskan ulang *block* `PUT /api/products/:id` dan `POST /api/products` di dalam `server.ts`. Menggunakan Prisma Wrapper Transaction `$transaction` untuk menyisipkan `.create` *StockLog* baru bertanda `update_product` & `initial_stock` apabila value-nya berbeda dengan di database awal. Komponen badge frontend `StockHistoryTab` juga telah diperbaiki untuk menyesuaikan `change_type` baru ini bersama logic warna dan nilai [ +/- ]. 
+
+**Next Session Plan:**
+- Tasks to continue: Phase 7 (Reports & Dashboard Refinements)
+
+**Notes:**
+- Tab Stock History tidak memperberat main view produk berkat modularization file. Logika stok (Sisa Stok Awal, dan Akhir) dicatat dengan transisi warna. Widget Stok Menipis bawaan dasbor langsung siap pakai.
+
+---
+
+### Session 4 - 2026-03-10 - Backend & Frontend Agent
+
+**Time:** Start: 21:30 | End: 21:40 | Duration: 10 mins
+
+**Tasks Completed:**
+- [Phase 5.1] Backend Transaction API: Implement JWT Bearer di endpoint transaksi. Konversi kalkulasi total & subtotal menjadi Backend Server-Side (berdasar price database agar terhindar dari spoofing client-side logic). User id ditarik dari AuthRequest Token.
+- [Phase 5.2] Frontend Transaction: Menambahkan Bearer Header pada fetch API Checkout POS dan Request Transaksi History / Detail / Delete. Memperbaiki bug binding properties pada mapping response data list Riwayat Transaksi.
+
+**Code Changes:**
+- Files modified: `server.ts`, `src/pages/POS.tsx`, `src/pages/History.tsx`, `docs/TASK_LIST.md`, `docs/BACK_LOG.md`.
+- Lines of code: ~90
+- Key implementations: Data typing typecast `Number(tx.total_amount)` and Date string parse in Frontend. Validasi BCrypt dan server logic JWT authorization for endpoints.
+
+**Issues Encountered:**
+- Issue: Variabel property dari Prisma JSON response beruba nama berbeda di frontend mock (`total_amount` dan `transaction_date`).
+- Solution: Diubah langsung ke properti schema Prisma yang aslinya agar fetch list array merender format dengan konsisten.
+- Issue: TypeScript arithmetic calculation menolak value subtotal `product.selling_price * item.qty`.
+- Solution: Di hard-cast kembali tipenya ke strict `Number()` saat mapping iterasi kalkulasi `$transaction` Prisma loop.
+- Issue: (Hotfix) BUG di Frontend `POS.tsx` saat menjumlah total tagihan. Tipe data respons API dari Prisma Decimal ter-parse sebagai `String` yang menyebabkan concatenasi teks (ex: `Rp 035003500`) dan bukan penjumlahan nominal.
+- Solution: Menambah JS parsing `Number()` eksplisit di dalam blok `reduce()` keranjang dan setter objek `addToCart` serta `updateQty`.
+
+**Next Session Plan:**
+- Tasks to continue: Phase 6 (Stock Management & Dashboard Metrics)
+
+**Notes:**
+- JWT Bearer Header mapping berhasil berfungsi penuh di modul Sales dan riwayat.
+
+---
+
+### Session 3 - 2026-03-10 - Backend & Frontend Agent
+
+**Time:** Start: 21:20 | End: 21:30 | Duration: 10 mins
+
+**Tasks Completed:**
+- [Phase 4.1] Backend Product API: Setup REST API Endpoint (GET, POST, PUT, DELETE) list produk lengkap beserta route protection authMiddleware, input stock > 0, price check, soft delete check. 
+- [Phase 4.2] Frontend Product: Update Axios component React untuk melampirkan token `Authorization: Bearer <token>` dari LocalStorage.
+
+**Code Changes:**
+- Files modified: `server.ts`, `src/pages/Products.tsx`, `.env`, `docs/TASK_LIST.md`, `docs/BACK_LOG.md`.
+- Lines of code: ~70
+- Key implementations: Penambahan middleware JWT ke API routes produk. Penambahan JWT header ke dalam API fetch calls di Products.tsx, validasi payload database (Stock, Harga wajib di atas nol, Soft Delete).
+
+**Issues Encountered:**
+- Issue: Salah ketik nama database `kasingwarung_db` menjadi `kasirwarung_db` ketika Phase 3 di file `.env`. 
+- Solution: Diubah dan disesuaikan sehingga API memanggil schema secara valid tanpa rejection.
+- Issue: Middleware JWT menghalangi semua test tanpa header authorization
+- Solution: Semua GET/POST/PUT/DELETE di frontend file ditarik Auth header-nya untuk meloloskan test dan render data. React State loading spinner selesai ter-load.
+
+**Next Session Plan:**
+- Tasks to continue: Phase 5 (Sales Transaction) dan perombakan logic stock checkout.
+
+**Notes:**
+- JWT token di frontend saat ini dipassing manual menggunakan `fetch()`. Di fase selanjutnya lebih baik jika setup instance Axios abstraction (Technical Debt).
+
+---
+
 ### Session 2 - 2026-03-09 - Security & Frontend Agent
 
 **Time:** Start: 22:45 | End: 22:50 | Duration: 5 mins

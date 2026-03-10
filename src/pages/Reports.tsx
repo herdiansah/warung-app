@@ -12,10 +12,22 @@ export default function Reports() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/reports?month=${monthFilter}`)
-      .then((res) => res.json())
+    const token = localStorage.getItem("warung_token");
+    fetch(`/api/reports?month=${monthFilter}`, {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Gagal mengambil laporan");
+        return res.json();
+      })
       .then((data) => {
         setData(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
         setLoading(false);
       });
   }, [monthFilter]);
@@ -24,7 +36,7 @@ export default function Reports() {
     <div className="space-y-6">
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-2xl font-bold text-gray-900">Laporan Penjualan</h1>
-        
+
         <div className="relative w-full sm:w-auto">
           <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
@@ -83,7 +95,7 @@ export default function Reports() {
               <BarChart3 className="w-5 h-5 text-emerald-600" />
               Produk Terlaris Bulan Ini
             </h2>
-            
+
             {data.top_products.length === 0 ? (
               <div className="text-center py-12 text-gray-500 border border-dashed border-gray-200 rounded-xl">
                 Belum ada data penjualan di bulan ini.

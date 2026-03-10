@@ -90,6 +90,18 @@
 - [x] Phase 2.2: Initial Migration dan Seed data
 - [x] Phase 3.1: Backend Login API (JWT & bcrypt)
 - [x] Phase 3.2: Frontend Login page & Auth Guard `ProtectedRoute`
+- [x] Phase 4.1: Backend Product API & Auth Validation
+- [x] Phase 4.2: Frontend Product Page (CRUD + Badge + Search)
+- [x] Phase 5.1: Backend Transaction API (Subtotal Calc, Stock Calc, Soft Delete & Validation)
+- [x] Phase 5.2: Frontend Transaction Page (POS & History Mapping)
+- [x] Phase 6.1: Backend Stock API (Adjust & History Logic)
+- [x] Phase 6.2: Frontend Stock Management (Stok History Tab & Quick Adjust Plus Minus)
+- [x] Phase 7.1: Backend Dashboard API (Ringkasan hari ini, JWT protected)
+- [x] Phase 7.2: Frontend Dashboard (Widget metrics terintegrasi)
+- [x] Phase 8.1: Backend Reports API (Query keuntungan bulanan)
+- [x] Phase 8.2: Frontend Reports (Laporan filter dinamis by YYYY-MM)
+- [x] Phase 10.1: Backend Logging (logger.error di semua catch, global error handler, JSON error format)
+- [x] Phase 10.2: Frontend Error Handling (alert stok habis, empty state produk, retry mechanism di POS)
 
 ---
 

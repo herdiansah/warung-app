@@ -60,6 +60,21 @@ async function main() {
     }
 
     console.log('Sample products seeded.')
+
+    // Seed Default Settings (key-value)
+    const defaultSettings = [
+        { key: 'low_stock_threshold', value: '5' },
+        { key: 'min_margin_percent', value: '10' },
+    ]
+
+    for (const s of defaultSettings) {
+        await prisma.setting.upsert({
+            where: { key: s.key },
+            update: {},
+            create: s,
+        })
+    }
+    console.log('Default settings seeded.')
 }
 
 main()

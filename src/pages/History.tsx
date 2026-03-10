@@ -1,19 +1,26 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
-import { Calendar, Trash2, ChevronDown, ChevronUp, Receipt } from "lucide-react";
+import { Calendar, Trash2, ChevronDown, ChevronUp, Receipt, AlertTriangle } from "lucide-react";
+import { useToast } from "../components/Toast";
 
 export default function History() {
+  const { showToast } = useToast();
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState(new Date().toISOString().split("T")[0]);
   const [expandedTx, setExpandedTx] = useState<number | null>(null);
   const [txDetails, setTxDetails] = useState<Record<number, any>>({});
   const [loadingDetails, setLoadingDetails] = useState<Record<number, boolean>>({});
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchTransactions = () => {
     setLoading(true);
-    fetch(`/api/transactions?date=${dateFilter}`)
+    const token = localStorage.getItem("warung_token");
+    fetch(`/api/transactions?date=${dateFilter}`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    })
       .then((res) => res.json())
       .then((data) => {
         setTransactions(data);
@@ -30,13 +37,16 @@ export default function History() {
       setExpandedTx(null);
       return;
     }
-    
+
     setExpandedTx(id);
-    
+
     if (!txDetails[id]) {
       setLoadingDetails((prev) => ({ ...prev, [id]: true }));
       try {
-        const res = await fetch(`/api/transactions/${id}`);
+        const token = localStorage.getItem("warung_token");
+        const res = await fetch(`/api/transactions/${id}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
         const data = await res.json();
         setTxDetails((prev) => ({ ...prev, [id]: data.items }));
       } catch (err) {
@@ -47,23 +57,67 @@ export default function History() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (confirm("Yakin ingin menghapus transaksi ini? Stok barang akan dikembalikan.")) {
-      const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        fetchTransactions();
-      } else {
-        const data = await res.json();
-        alert(data.error || "Gagal menghapus transaksi");
-      }
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    const token = localStorage.getItem("warung_token");
+    const res = await fetch(`/api/transactions/${deleteTarget}`, {
+      method: "DELETE",
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    setIsDeleting(false);
+    setDeleteTarget(null);
+    if (res.ok) {
+      showToast("Transaksi berhasil dihapus, stok dikembalikan.", "success");
+      fetchTransactions();
+    } else {
+      const data = await res.json();
+      showToast(data.error || "Gagal menghapus transaksi", "error");
     }
   };
 
   return (
     <div className="space-y-6">
+
+      {/* Modal Konfirmasi Hapus */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-5 animate-fade-in">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Hapus Transaksi?</h3>
+                <p className="text-sm text-gray-500 mt-0.5">Stok barang akan dikembalikan ke inventori.</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={isDeleting}
+                className="flex-1 py-3 rounded-xl border border-gray-200 font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isDeleting ? (
+                  <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                ) : (
+                  "Ya, Hapus"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-2xl font-bold text-gray-900">Riwayat Transaksi</h1>
-        
+
         <div className="relative w-full sm:w-auto">
           <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
@@ -87,7 +141,7 @@ export default function History() {
         <div className="space-y-4">
           {transactions.map((tx) => (
             <div key={tx.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all">
-              <div 
+              <div
                 className="p-4 sm:p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 cursor-pointer hover:bg-gray-50"
                 onClick={() => toggleExpand(tx.id)}
               >
@@ -97,19 +151,19 @@ export default function History() {
                   </div>
                   <div>
                     <p className="font-bold text-gray-900 text-lg">
-                      Rp {tx.total.toLocaleString("id-ID")}
+                      Rp {Number(tx.total_amount || 0).toLocaleString("id-ID")}
                     </p>
                     <p className="text-sm text-gray-500 font-medium">
-                      {format(new Date(tx.date), "HH:mm - d MMMM yyyy", { locale: id })}
+                      {format(new Date(tx.transaction_date), "HH:mm - d MMMM yyyy", { locale: id })}
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDelete(tx.id);
+                      setDeleteTarget(tx.id);
                     }}
                     className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                     title="Hapus Transaksi"

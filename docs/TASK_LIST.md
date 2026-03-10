@@ -95,114 +95,127 @@ Update sesuai kondisi:
 ## Phase 4: Product Management
 
 ### 4.1 — Backend Product API ⚙️ Backend Agent
-- [ ] `GET /api/products` — daftar produk (filter is_active)
-- [ ] `POST /api/products` — tambah produk (validasi: name wajib, harga > 0, stok >= 0)
-- [ ] `PUT /api/products/:id` — edit produk
-- [ ] `DELETE /api/products/:id` — soft delete (is_active = false, tolak jika ada transaksi)
-- [ ] Search produk by name
+- [x] `GET /api/products` — daftar produk (filter is_active)
+- [x] `POST /api/products` — tambah produk (validasi: name wajib, harga > 0, stok >= 0)
+- [x] `PUT /api/products/:id` — edit produk
+- [x] `DELETE /api/products/:id` — soft delete (is_active = false, tolak jika ada transaksi)
+- [x] Search produk by name
 
 ### 4.2 — Frontend Product 🎨 Frontend Agent
-- [ ] Halaman Daftar Produk (list + search)
-- [ ] Form Tambah Produk
-- [ ] Form Edit Produk
-- [ ] Konfirmasi Hapus Produk
-- [ ] Tampilkan badge stok rendah
+- [x] Halaman Daftar Produk (list + search)
+- [x] Form Tambah Produk
+- [x] Form Edit Produk
+- [x] Konfirmasi Hapus Produk
+- [x] Tampilkan badge stok rendah
 
 ---
 
 ## Phase 5: Sales Transaction (Core Feature)
 
 ### 5.1 — Backend Transaction API ⚙️ Backend Agent
-- [ ] `POST /api/transactions` — buat transaksi baru
+- [x] `POST /api/transactions` — buat transaksi baru
   - Ambil harga produk dari DB
   - Hitung subtotal per item (qty × selling_price)
   - Hitung total transaksi (sum subtotal)
   - Validasi stok tersedia (tolak jika stock < qty)
   - Kurangi stok produk
   - Catat stock_log (change_type: "sale")
-- [ ] `GET /api/transactions` — list transaksi (filter by date)
-- [ ] `GET /api/transactions/:id` — detail transaksi + items
-- [ ] `DELETE /api/transactions/:id` — hapus transaksi + kembalikan stok
+- [x] `GET /api/transactions` — list transaksi (filter by date)
+- [x] `GET /api/transactions/:id` — detail transaksi + items
+- [x] `DELETE /api/transactions/:id` — hapus transaksi + kembalikan stok
 
 ### 5.2 — Frontend Transaction 🎨 Frontend Agent
-- [ ] Halaman Transaksi Baru
+- [x] Halaman Transaksi Baru
   - Search/pilih produk
   - Input qty
   - Daftar item terpilih
   - Tampilkan total
   - Tombol Simpan (besar, kontras tinggi)
-- [ ] Halaman Riwayat Transaksi
+- [x] Halaman Riwayat Transaksi
   - List transaksi (tanggal, total, jumlah item)
   - Filter tanggal
-- [ ] Detail Transaksi (daftar item, qty, subtotal)
-- [ ] Konfirmasi Hapus Transaksi
+- [x] Detail Transaksi (daftar item, qty, subtotal)
+- [x] Konfirmasi Hapus Transaksi
 
 ---
 
 ## Phase 6: Stock Management
 
 ### 6.1 — Backend Stock API ⚙️ Backend Agent
-- [ ] `POST /api/products/:id/stock` — tambah stok masuk
-  - Update stok produk
-  - Catat stock_log (change_type: "restock")
-- [ ] `GET /api/products/:id/stock-logs` — riwayat perubahan stok
-- [ ] Logic low stock alert (threshold default = 5)
+- [x] `GET /api/stocks/history` — list riwayat perubahan stok lengkap
+- [x] `POST /api/stocks/adjust` — fitur opname stok manual
+- [x] `GET /api/stocks/low` — alert produk yang stok <= 5
 
-### 6.2 — Frontend Stock 🎨 Frontend Agent
-- [ ] Form Tambah Stok
-- [ ] Riwayat Perubahan Stok
-- [ ] Indikator stok rendah di halaman produk
+### 6.2 — Frontend Dashboard/Stock 🎨 Frontend Agent
+- [x] Widget "Stok Menipis" di Dashboard
+- [x] Tab/Halaman Riwayat Stok
+- [x] Fitur update stok manual (plus minus) list produk
 
 ---
 
 ## Phase 7: Dashboard
 
 ### 7.1 — Backend Dashboard API ⚙️ Backend Agent
-- [ ] `GET /api/dashboard` — ringkasan hari ini
+- [x] `GET /api/dashboard` — ringkasan hari ini
   - Total penjualan hari ini
   - Total transaksi hari ini
   - Produk terlaris (qty tertinggi hari ini)
   - Daftar produk stok hampir habis (stock <= threshold)
 
 ### 7.2 — Frontend Dashboard 🎨 Frontend Agent
-- [ ] Kartu Penjualan Hari Ini
-- [ ] Kartu Total Transaksi
-- [ ] Kartu Produk Terlaris
-- [ ] Daftar Stok Hampir Habis
-- [ ] Auto-refresh saat halaman dibuka
-- [ ] Navigasi cepat ke Tambah Transaksi
+- [x] Kartu Penjualan Hari Ini
+- [x] Kartu Total Transaksi
+- [x] Kartu Produk Terlaris
+- [x] Daftar Stok Hampir Habis
+- [x] Auto-refresh saat halaman dibuka
+- [x] Navigasi cepat ke Tambah Transaksi
 
 ---
 
 ## Phase 8: Laporan Penjualan
 
 ### 8.1 — Backend Report API ⚙️ Backend Agent
-- [ ] `GET /api/reports/daily?date=YYYY-MM-DD`
+- [x] `GET /api/reports/daily?date=YYYY-MM-DD`
   - Total omzet, total transaksi, total item terjual, profit
   - Profit = sum((selling_price - purchase_price) × qty)
-- [ ] `GET /api/reports/monthly?month=YYYY-MM`
+- [x] `GET /api/reports/monthly?month=YYYY-MM`
   - Total omzet, total transaksi, produk terlaris, total profit
 
 ### 8.2 — Frontend Report 🎨 Frontend Agent
-- [ ] Halaman Laporan Harian (date picker + ringkasan)
-- [ ] Halaman Laporan Bulanan (month picker + ringkasan)
-- [ ] Tampilan produk terlaris
+- [x] Halaman Laporan Harian (date picker + ringkasan)
+- [x] Halaman Laporan Bulanan (month picker + ringkasan)
+- [x] Tampilan produk terlaris
+
+---
+
+## Phase 9: Preferences & Configuration (Baru Ditambahkan)
+
+### 9.1 — Backend Settings API ⚙️ Backend Agent
+- [x] Penambahan kolom `low_stock_threshold` default 5 di schema `User` Prisma.
+- [x] Endpoint `GET /api/settings`
+- [x] Endpoint `PUT /api/settings` untuk update threshold custom.
+- [x] Modifikasi `GET /api/dashboard` menggunakan dinamis user-owned threshold (tidak lagi statis 5).
+
+### 9.2 — Frontend Settings 🎨 Frontend Agent
+- [x] UI Halaman `Settings.tsx`.
+- [x] Sidebar Navigation icon untuk /settings.
+- [x] Form integrasi Threshold Manajemen Stok.
 
 ---
 
 ## Phase 9: UI/UX Polish
 
 ### 9.1 — Global UI 🎨 Frontend Agent
-- [ ] Bottom navigation (Dashboard, Transaksi, Produk, Laporan, Pengaturan)
-- [ ] Responsive layout (mobile first)
-- [ ] Font besar, tombol besar, kontras tinggi
-- [ ] Loading states & skeleton screens
-- [ ] Toast/snackbar notifikasi sukses/error
-- [ ] Empty state untuk list kosong
+- [x] Bottom navigation (Dashboard, Transaksi, Produk, Laporan, Pengaturan)
+- [x] Responsive layout (mobile first)
+- [x] Font besar, tombol besar, kontras tinggi
+- [x] Loading states & skeleton screens
+- [x] Toast/snackbar notifikasi sukses/error
+- [x] Empty state untuk list kosong
 
 ### 9.2 — Halaman Pengaturan 🎨 Frontend Agent
-- [ ] Info profil user
-- [ ] Ubah threshold stok rendah
+- [x] Info profil user
+- [x] Ubah threshold stok rendah
 - [ ] Export CSV (future, opsional)
 
 ---
@@ -210,14 +223,14 @@ Update sesuai kondisi:
 ## Phase 10: Logging & Error Handling
 
 ### 10.1 — Backend Logging ⚙️ Backend Agent
-- [ ] Log event: product created, product updated, transaction created, stock changed
-- [ ] Global error handler middleware
-- [ ] Validasi error response format (JSON)
+- [x] Log event: product created, product updated, transaction created, stock changed
+- [x] Global error handler middleware
+- [x] Validasi error response format (JSON)
 
 ### 10.2 — Frontend Error Handling 🎨 Frontend Agent
-- [ ] Alert stok habis saat transaksi
-- [ ] Pesan produk tidak ditemukan
-- [ ] Retry mechanism untuk gagal simpan
+- [x] Alert stok habis saat transaksi
+- [x] Pesan produk tidak ditemukan
+- [x] Retry mechanism untuk gagal simpan
 
 ---
 
