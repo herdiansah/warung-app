@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
@@ -6,13 +7,14 @@ async function main() {
     console.log('Seeding data...')
 
     // Seed Default Admin User
+    const hashedPassword = await bcrypt.hash('123456', 12)
     const admin = await prisma.user.upsert({
         where: { email: 'admin@warung.com' },
         update: {},
         create: {
             name: 'Owner',
             email: 'admin@warung.com',
-            password_hash: '123456', // using plain string for MVP simplicity as per SQLite version earlier
+            password_hash: hashedPassword,
         },
     })
     console.log('Admin user seeded:', admin.email)

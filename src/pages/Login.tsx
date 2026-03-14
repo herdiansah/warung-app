@@ -106,9 +106,6 @@ export default function Login() {
                         </button>
                     </form>
 
-                    <div className="mt-8 text-center">
-                        <p className="text-xs text-gray-400">Demo: admin@warung.com / 123456</p>
-                    </div>
                 </div>
 
                 <p className="text-center text-xs text-gray-400 mt-6">

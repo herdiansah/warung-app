@@ -14,12 +14,48 @@ const __dirname = path.dirname(__filename);
 
 const prisma = new PrismaClient();
 
+// Validate required environment variables before starting
+if (!process.env.JWT_SECRET) {
+  console.error("CRITICAL: JWT_SECRET environment variable is not set. Set it in your .env file.");
+  process.exit(1);
+}
+
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// Return safe error message: detailed in dev, generic in production
+function safeErrorMessage(err: any): string {
+  return process.env.NODE_ENV === "production"
+    ? "An internal server error occurred."
+    : (err?.message || "Unknown error");
+}
+
+// Simple in-memory rate limiter for login endpoint
+const loginAttemptMap = new Map<string, { count: number; resetAt: number }>();
+const LOGIN_RATE_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const LOGIN_MAX_ATTEMPTS = 5;
+
+function getClientIp(req: express.Request): string {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string") return forwarded.split(",")[0].trim();
+  return req.socket.remoteAddress || "unknown";
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  // Restrict request body size to prevent payload-based DoS
+  app.use(express.json({ limit: "10kb" }));
   app.use(requestLogger);
+
+  // Basic security headers
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    next();
+  });
 
   // --- Utility: Get Default User for MVP ---
   async function getDefaultUser() {
@@ -39,25 +75,50 @@ async function startServer() {
 
   // --- Auth API ---
   app.post("/api/auth/login", async (req, res) => {
+    const ip = getClientIp(req);
+    const now = Date.now();
+
+    // Rate limiting: max 5 attempts per 15 minutes per IP
+    const record = loginAttemptMap.get(ip);
+    if (record) {
+      if (now < record.resetAt) {
+        if (record.count >= LOGIN_MAX_ATTEMPTS) {
+          return res.status(429).json({ error: "Too many login attempts. Please try again later." });
+        }
+      } else {
+        // Window expired, reset
+        loginAttemptMap.delete(ip);
+      }
+    }
+
     try {
       const { email, password } = req.body;
+
+      if (!email || !password || typeof email !== "string" || typeof password !== "string") {
+        return res.status(400).json({ error: "Email and password are required." });
+      }
+
       const user = await prisma.user.findUnique({ where: { email } });
 
-      if (!user) {
+      const isMatch = user ? await bcrypt.compare(password, user.password_hash) : false;
+
+      if (!user || !isMatch) {
+        // Increment failed attempts
+        const current = loginAttemptMap.get(ip);
+        if (current && now < current.resetAt) {
+          current.count += 1;
+        } else {
+          loginAttemptMap.set(ip, { count: 1, resetAt: now + LOGIN_RATE_WINDOW_MS });
+        }
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
-      // Check for 'dummy_hash' fallback mapping for backwards compatibility during testing
-      // (in case the seed script created an unhashed password)
-      const isMatch = await bcrypt.compare(password, user.password_hash) || (password === '123456' && (user.password_hash === '123456' || user.password_hash === 'dummy_hash'));
-
-      if (!isMatch) {
-        return res.status(401).json({ error: "Invalid email or password" });
-      }
+      // Successful login: clear rate limit for this IP
+      loginAttemptMap.delete(ip);
 
       const token = jwt.sign(
         { id: user.id, name: user.name, email: user.email },
-        process.env.JWT_SECRET || "warung_super_secret_key_2026",
+        JWT_SECRET,
         { expiresIn: "7d" }
       );
 
@@ -65,7 +126,7 @@ async function startServer() {
       res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
     } catch (err: any) {
       logger.error("Login failed", { error: err.message });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Authentication failed." });
     }
   });
 
@@ -86,7 +147,7 @@ async function startServer() {
       res.json(result);
     } catch (err: any) {
       logger.error("GET /api/settings failed", { error: err.message });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrorMessage(err) });
     }
   });
 
@@ -94,7 +155,17 @@ async function startServer() {
     try {
       const updates: Record<string, string> = req.body;
 
+      if (typeof updates !== "object" || Array.isArray(updates)) {
+        return res.status(400).json({ error: "Invalid settings payload." });
+      }
+
       for (const [key, value] of Object.entries(updates)) {
+        if (typeof key !== "string" || key.length > 100) {
+          return res.status(400).json({ error: "Setting key must be a string of at most 100 characters." });
+        }
+        if (typeof value !== "string" || value.length > 1000) {
+          return res.status(400).json({ error: "Setting value must be a string of at most 1000 characters." });
+        }
         await prisma.setting.upsert({
           where: { key },
           create: { key, value: String(value) },
@@ -104,7 +175,7 @@ async function startServer() {
       res.json({ success: true });
     } catch (err: any) {
       logger.error("PUT /api/settings failed", { error: err.message });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrorMessage(err) });
     }
   });
 
@@ -120,7 +191,7 @@ async function startServer() {
       res.json(products);
     } catch (err: any) {
       logger.error("GET /api/products failed", { error: err.message });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrorMessage(err) });
     }
   });
 
@@ -163,7 +234,7 @@ async function startServer() {
       res.json({ id: product.id });
     } catch (err: any) {
       logger.error("POST /api/products failed", { error: err.message, body: req.body });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrorMessage(err) });
     }
   });
 
@@ -203,7 +274,7 @@ async function startServer() {
       res.json({ success: true });
     } catch (err: any) {
       logger.error("PUT /api/products/:id failed", { id: req.params.id, error: err.message });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrorMessage(err) });
     }
   });
 
@@ -230,7 +301,7 @@ async function startServer() {
       res.json({ success: true });
     } catch (err: any) {
       logger.error("DELETE /api/products/:id failed", { id: req.params.id, error: err.message });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrorMessage(err) });
     }
   });
 
@@ -299,7 +370,12 @@ async function startServer() {
       res.json({ id: tx.id });
     } catch (err: any) {
       logger.error("POST /api/transactions failed", { error: err.message });
-      res.status(500).json({ error: err.message });
+      // Business logic errors (e.g. insufficient stock) return 400, not 500
+      const isBusinessError = err.message?.includes("Stok tidak cukup") || err.message?.includes("Product not found");
+      if (isBusinessError) {
+        return res.status(400).json({ error: err.message });
+      }
+      res.status(500).json({ error: safeErrorMessage(err) });
     }
   });
 
@@ -310,8 +386,14 @@ async function startServer() {
       let dateFilter = {};
 
       if (date) {
+        if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD." });
+        }
         const startDate = new Date(`${date}T00:00:00.000Z`);
         const endDate = new Date(`${date}T23:59:59.999Z`);
+        if (isNaN(startDate.getTime())) {
+          return res.status(400).json({ error: "Invalid date value." });
+        }
         dateFilter = {
           transaction_date: {
             gte: startDate,
@@ -328,7 +410,7 @@ async function startServer() {
       res.json(transactions);
     } catch (err: any) {
       logger.error("GET /api/transactions failed", { error: err.message });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrorMessage(err) });
     }
   });
 
@@ -342,7 +424,7 @@ async function startServer() {
       res.json(tx);
     } catch (err: any) {
       logger.error("GET /api/transactions/:id failed", { id: req.params.id, error: err.message });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrorMessage(err) });
     }
   });
 
@@ -388,7 +470,7 @@ async function startServer() {
       res.json({ success: true });
     } catch (err: any) {
       logger.error("DELETE /api/transactions/:id failed", { id: req.params.id, error: err.message });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrorMessage(err) });
     }
   });
 
@@ -402,15 +484,18 @@ async function startServer() {
       res.json(logs);
     } catch (err: any) {
       logger.error("GET /api/stocks/history failed", { error: err.message });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrorMessage(err) });
     }
   });
 
   app.post("/api/stocks/adjust", authenticateToken, async (req: AuthRequest, res) => {
     try {
       const { product_id, diff, reason } = req.body; // diff can be + or -
-      if (!product_id || typeof diff !== 'number') {
+      if (!product_id || typeof diff !== 'number' || !Number.isInteger(diff)) {
         return res.status(400).json({ error: "Invalid adjustment request" });
+      }
+      if (reason !== undefined && (typeof reason !== "string" || reason.length > 100)) {
+        return res.status(400).json({ error: "Reason must be a string of at most 100 characters." });
       }
 
       await prisma.$transaction(async (txPrisma) => {
@@ -440,7 +525,7 @@ async function startServer() {
       res.json({ success: true });
     } catch (err: any) {
       logger.error("POST /api/stocks/adjust failed", { product_id: req.body?.product_id, error: err.message });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrorMessage(err) });
     }
   });
 
@@ -455,7 +540,7 @@ async function startServer() {
       res.json(products);
     } catch (err: any) {
       logger.error("GET /api/stocks/low failed", { error: err.message });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrorMessage(err) });
     }
   });
 
@@ -513,7 +598,7 @@ async function startServer() {
       });
     } catch (err: any) {
       logger.error("GET /api/dashboard failed", { error: err.message });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrorMessage(err) });
     }
   });
 
@@ -521,6 +606,10 @@ async function startServer() {
     try {
       const { month } = req.query; // YYYY-MM
       if (!month) return res.status(400).json({ error: "Month is required" });
+
+      if (typeof month !== "string" || !/^\d{4}-\d{2}$/.test(month)) {
+        return res.status(400).json({ error: "Invalid month format. Use YYYY-MM." });
+      }
 
       const startDate = new Date(`${month}-01T00:00:00.000Z`);
       const nextMonthDate = new Date(startDate);
@@ -572,7 +661,7 @@ async function startServer() {
       });
     } catch (err: any) {
       logger.error("GET /api/reports failed", { month: req.query.month, error: err.message });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrorMessage(err) });
     }
   });
 

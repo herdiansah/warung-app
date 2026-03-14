@@ -18,7 +18,11 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     }
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || "warung_super_secret_key_2026") as any;
+        const secret = process.env.JWT_SECRET;
+        if (!secret) {
+            return res.status(500).json({ error: "Server configuration error." });
+        }
+        const decoded = jwt.verify(token, secret) as any;
         req.user = decoded;
         next();
     } catch (error) {
