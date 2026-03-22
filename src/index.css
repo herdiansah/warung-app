@@ -68,6 +68,54 @@ button:focus-visible {
   animation: fadeIn 0.2s ease-out;
 }
 
+/* Quick win #7: Print stylesheet */
+@media print {
+  /* Hide navigation, buttons, and non-essential UI */
+  nav,
+  .print\:hidden,
+  button:not(.print-show) {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+    font-size: 12pt;
+  }
+
+  main {
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Tables look clean on paper */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10pt;
+  }
+  th, td {
+    border: 1px solid #e5e7eb;
+    padding: 6px 10px;
+    text-align: left;
+  }
+  th {
+    background: #f9fafb;
+    font-weight: 700;
+  }
+
+  /* Cards become simple bordered boxes */
+  .rounded-2xl, .rounded-xl, .shadow-sm, .shadow {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    border: 1px solid #e5e7eb !important;
+  }
+
+  /* Show page URL and title */
+  @page {
+    margin: 1.5cm;
+  }
+}
+
 /* Number input hide arrows */
 input[type='number']::-webkit-inner-spin-button,
 input[type='number']::-webkit-outer-spin-button {

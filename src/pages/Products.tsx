@@ -22,6 +22,7 @@ export default function Products() {
   const [minMarginPercent, setMinMarginPercent] = useState<number>(10);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [lowStockThreshold, setLowStockThreshold] = useState<number>(5);
 
   const adjustStock = async (id: number, diff: number) => {
     const token = localStorage.getItem("warung_token");
@@ -74,6 +75,7 @@ export default function Products() {
       .then(res => res.json())
       .then(data => {
         if (data.min_margin_percent) setMinMarginPercent(parseFloat(data.min_margin_percent));
+        if (data.low_stock_threshold) setLowStockThreshold(parseInt(data.low_stock_threshold, 10));
       })
       .catch(() => { });
   }, []);
@@ -164,6 +166,13 @@ export default function Products() {
     }
   };
 
+  // Quick win #9: 3-tier stock color coding
+  const stockColorClass = (stock: number) => {
+    if (stock <= lowStockThreshold) return "bg-red-100 text-red-700";
+    if (stock <= lowStockThreshold * 2) return "bg-amber-100 text-amber-700";
+    return "bg-emerald-100 text-emerald-700";
+  };
+
   const filteredProducts = products.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -231,7 +240,7 @@ export default function Products() {
                         >
                           <Minus className="w-3 h-3" />
                         </button>
-                        <span className={`px-2 py-0.5 rounded-md text-xs font-bold ${product.stock <= 5 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        <span className={`px-2 py-0.5 rounded-md text-xs font-bold ${stockColorClass(product.stock)}`}>
                           {product.stock} {product.unit}
                         </span>
                         <button
@@ -272,9 +281,18 @@ export default function Products() {
                   </div>
                 </div>
               ))}
+              {/* Quick win #4: Better empty state */}
               {filteredProducts.length === 0 && (
-                <div className="col-span-full text-center py-12 text-gray-500 bg-white rounded-2xl border border-dashed border-gray-300">
-                  Tidak ada produk yang ditemukan.
+                <div className="col-span-full flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-dashed border-gray-200 text-center">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                    <Package className="w-8 h-8 text-gray-300" />
+                  </div>
+                  <p className="font-semibold text-gray-500">
+                    {search ? `Tidak ada produk untuk "${search}"` : "Belum ada produk"}
+                  </p>
+                  {!search && (
+                    <p className="text-sm text-gray-400 mt-1">Klik "Tambah Produk" untuk mulai.</p>
+                  )}
                 </div>
               )}
             </div>

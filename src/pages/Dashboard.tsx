@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { TrendingUp, ShoppingBag, AlertCircle, Plus, RefreshCw } from "lucide-react";
+import { TrendingUp, ShoppingBag, AlertCircle, Plus, RefreshCw, Clock } from "lucide-react";
 
 export default function Dashboard() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);  // Quick win #10
+  const [syncLabel, setSyncLabel] = useState("");
 
   const fetchDashboard = () => {
     setLoading(true);
@@ -21,6 +23,7 @@ export default function Dashboard() {
       .then((data) => {
         setData(data);
         setLoading(false);
+        setLastSynced(new Date());  // Quick win #10
       })
       .catch(() => {
         setError(true);
@@ -31,6 +34,21 @@ export default function Dashboard() {
   useEffect(() => {
     fetchDashboard();
   }, []);
+
+  // Quick win #10: Update "X minutes ago" label every 30 seconds
+  useEffect(() => {
+    const update = () => {
+      if (!lastSynced) return;
+      const diffMs = Date.now() - lastSynced.getTime();
+      const diffMin = Math.floor(diffMs / 60000);
+      if (diffMin < 1) setSyncLabel("baru saja");
+      else if (diffMin === 1) setSyncLabel("1 menit lalu");
+      else setSyncLabel(`${diffMin} menit lalu`);
+    };
+    update();
+    const interval = setInterval(update, 30000);
+    return () => clearInterval(interval);
+  }, [lastSynced]);
 
   if (loading) {
     return (
@@ -62,7 +80,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <header className="flex justify-between items-center">
+      <header className="flex justify-between items-start">
         <div>
           <h1 className="text-2xl font-extrabold text-gray-900">Ringkasan Hari Ini</h1>
           <p className="text-gray-400 text-sm mt-0.5">
@@ -73,6 +91,17 @@ export default function Dashboard() {
               day: "numeric",
             })}
           </p>
+          {/* Quick win #10: Last synced timestamp */}
+          {lastSynced && (
+            <button
+              onClick={fetchDashboard}
+              className="flex items-center gap-1.5 text-xs text-gray-400 mt-1.5 hover:text-emerald-600 transition-colors group"
+            >
+              <Clock className="w-3 h-3" />
+              <span>Diperbarui {syncLabel}</span>
+              <RefreshCw className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
+          )}
         </div>
         <Link
           to="/pos"

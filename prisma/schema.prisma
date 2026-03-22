@@ -39,13 +39,14 @@ model Product {
 }
 
 model Transaction {
-  id               String            @id @default(uuid())
-  transaction_date DateTime          @default(now())
-  total_amount     Decimal
-  created_by       String
-  user             User              @relation(fields: [created_by], references: [id])
-  created_at       DateTime          @default(now())
-  items            TransactionItem[]
+  id                 String            @id @default(uuid())
+  transaction_number Int               @default(autoincrement())
+  transaction_date   DateTime          @default(now())
+  total_amount       Decimal
+  created_by         String
+  user               User              @relation(fields: [created_by], references: [id])
+  created_at         DateTime          @default(now())
+  items              TransactionItem[]
 
   @@index([transaction_date])
 }

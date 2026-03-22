@@ -1,16 +1,18 @@
 import { useState, useEffect } from "react";
-import { Settings as SettingsIcon, Save } from "lucide-react";
+import { Settings as SettingsIcon, Save, Store } from "lucide-react";
 import { useToast } from "../components/Toast";
 
 interface SettingsData {
     low_stock_threshold: string;
     min_margin_percent: string;
+    store_name: string;
     [key: string]: string;
 }
 
 const DEFAULTS: SettingsData = {
     low_stock_threshold: "5",
-    min_margin_percent: "10"
+    min_margin_percent: "10",
+    store_name: "WarungApp"
 };
 
 export default function Settings() {
@@ -55,6 +57,12 @@ export default function Settings() {
             });
 
             if (!res.ok) throw new Error("Gagal menyimpan pengaturan");
+
+            // Quick win #6: Persist store_name to localStorage for Layout
+            if (settings.store_name) {
+                localStorage.setItem("warung_store_name", settings.store_name);
+            }
+
             showToast("Pengaturan berhasil disimpan!", "success");
         } catch (err: any) {
             showToast(err.message, "error");
@@ -78,6 +86,31 @@ export default function Settings() {
             </header>
 
             <form onSubmit={handleSave} className="space-y-6">
+                {/* Quick win #6: Store name setting */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+                    <h2 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-2 flex items-center gap-2">
+                        <Store className="w-5 h-5 text-emerald-600" />
+                        Informasi Toko
+                    </h2>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Nama Toko
+                        </label>
+                        <input
+                            type="text"
+                            required
+                            value={settings.store_name}
+                            onChange={(e) => handleChange("store_name", e.target.value)}
+                            className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                            placeholder="Contoh: Warung Bu Siti"
+                            maxLength={50}
+                        />
+                        <p className="text-xs text-gray-400 mt-1">
+                            Ditampilkan di header sidebar aplikasi
+                        </p>
+                    </div>
+                </div>
+
                 {/* Stok Management */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
                     <h2 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-2">📦 Manajemen Stok</h2>

@@ -150,6 +150,12 @@ export default function History() {
                     <Receipt className="w-6 h-6" />
                   </div>
                   <div>
+                    {/* Quick win #8: Transaction number */}
+                    <p className="text-xs font-bold text-gray-400 mb-0.5">
+                      {tx.transaction_number
+                        ? `TRX-${String(tx.transaction_number).padStart(4, "0")}`
+                        : `#${tx.id.slice(-6).toUpperCase()}`}
+                    </p>
                     <p className="font-bold text-gray-900 text-lg">
                       Rp {Number(tx.total_amount || 0).toLocaleString("id-ID")}
                     </p>
