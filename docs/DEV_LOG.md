@@ -45,6 +45,61 @@
 
 *[Newest entries at the top]*
 
+### Session 14 - 2026-03-22 - Claude AI (App Review Agent)
+
+**Time:** Start: 01:30 | End: 01:50 | Duration: ~20 mins
+
+**Tasks Completed:**
+- [Review] Conducted full codebase review — analyzed all 22 TypeScript files, 7 pages, 6 DB models, 15+ API endpoints, and all `/docs` files.
+- [Review] Produced `docs/APP_REVIEW.md` — comprehensive review covering current strengths, gaps, and 17 prioritized feature recommendations across 3 tiers with a suggested implementation roadmap.
+- [QW-01] Change calculation on POS — "Uang Diterima" input + real-time "Kembalian / Kurang" display in cart footer.
+- [QW-02] Keyboard shortcut — press `/` anywhere on the POS page to focus the product search input.
+- [QW-03] Low-stock count badge — red badge with count on "Produk" sidebar nav item and mobile bottom nav.
+- [QW-04] Empty state improvements — Package icon + contextual messages in POS (no search results) and Products (no products).
+- [QW-05] Confirm on page leave — `useBlocker` dialog for in-app navigation + native `beforeunload` for browser close when POS cart is not empty.
+- [QW-06] Store name setting — "Nama Toko" field in Settings page, persisted to API + localStorage, displayed in sidebar header.
+- [QW-07] Print stylesheet — `@media print` CSS hides nav/buttons, cleans up tables with borders, sets `@page` margins.
+- [QW-08] Transaction number — `TRX-NNNN` display in History page; falls back to last 6 chars of UUID; `transaction_number Int @default(autoincrement())` added to schema (requires `prisma db push` when DB is live).
+- [QW-09] Stock color coding — 3-tier system: 🔴 red (≤ threshold), 🟡 amber (≤ 2× threshold), 🟢 green (above); threshold read dynamically from settings.
+- [QW-10] Last synced timestamp — "Diperbarui X menit lalu" shown on Dashboard with click-to-refresh; updates every 30 seconds.
+
+**Code Changes:**
+- Files created: `docs/APP_REVIEW.md`
+- Files modified: `prisma/schema.prisma`, `src/pages/POS.tsx`, `src/components/Layout.tsx`, `src/pages/Settings.tsx`, `src/pages/Dashboard.tsx`, `src/pages/History.tsx`, `src/pages/Products.tsx`, `src/index.css`
+- Lines of code: ~+441 / -147 (net +294)
+- Commits: 2 (`docs: add comprehensive app review`, `feat: implement 10 quick win improvements`)
+
+**Issues Encountered:**
+- Issue: MySQL not running in the environment — `prisma db push` could not execute for the `transaction_number` schema change.
+- Solution: Schema change committed and ready; History page gracefully falls back to UUID-based reference (`#XXXXXX`) until `prisma db push` is run on a live DB.
+- Issue: `npx prisma` pulled Prisma v7 which rejects `url = env(...)` in schema.prisma.
+- Solution: Used `./node_modules/.bin/prisma` (local v6.19.2) instead.
+
+**Next Session Plan:**
+- Run `prisma db push` on a live DB to activate `transaction_number` auto-increment.
+- Proceed with Tier 1 features from `docs/APP_REVIEW.md`: multi-user roles, multiple payment methods, customer debt tracking, receipt generation, barcode support.
+
+**Notes:**
+- `docs/APP_REVIEW.md` serves as the new feature roadmap. All 17 recommendations are prioritized and include schema change proposals and effort estimates.
+
+---
+
+### Session 13 - 2026-03-22 - Claude AI (App Review Agent)
+
+**Time:** Start: 01:20 | End: 01:30 | Duration: ~10 mins
+
+**Tasks Completed:**
+- [Review] Explored full codebase structure and produced initial `docs/APP_REVIEW.md` with complete application assessment and feature recommendations.
+
+**Code Changes:**
+- Files created: `docs/APP_REVIEW.md`
+- Lines of code: ~402
+
+**Notes:**
+- This was a research/planning session. Implementation followed in Session 14.
+
+---
+
 ### Session 12 - 2026-03-11 - Architect Agent
 
 **Time:** Start: 05:43 | End: 05:45 | Duration: 2 mins
