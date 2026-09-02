@@ -59,6 +59,7 @@ model TransactionItem {
   product_name   String
   qty            Int
   price          Decimal
+  unit_cost      Decimal
   subtotal       Decimal
 
   @@index([product_id])

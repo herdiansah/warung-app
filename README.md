@@ -1,95 +1,67 @@
-# 🏪 Warung Sales Record App
+# Warung App
 
-Aplikasi pencatatan penjualan warung berbasis web (PWA Ready) yang dirancang khusus untuk pemilik warung kecil atau toko kelontong. Aplikasi ini mempermudah pencatatan penjualan harian, pemantauan stok barang, dan melihat ringkasan keuntungan tanpa memerlukan kemampuan akuntansi yang rumit.
+Warung App is an open-source sales, inventory, and profit-recording application for Indonesian micro-retail businesses (“warung”) and neighborhood shops. It is designed to make daily shop operations approachable without accounting expertise.
 
-## ✨ Fitur Utama (MVP)
+## Current features
 
-- **📈 Dashboard**: Menampilkan ringkasan penjualan, transaksi hari ini, produk terlaris, dan peringatan stok hampir habis.
-- **📦 Manajemen Produk**: Tambah, edit, hapus, dan cari produk dengan fitur peringatan stok rendah.
-- **🛒 Pencatatan Transaksi (POS)**: Fitur kasir sederhana untuk mencatat penjualan dengan kalkulasi otomatis dan pemotongan stok secara real-time.
-- **📉 Manajemen Stok**: Catat masuk/keluarnya stok, penyesuaian stok manual (opname), dan pantau riwayat pergerakan barang.
-- **📊 Laporan Penjualan**: Laporan harian dan bulanan otomatis yang mencakup omzet, profit, transaksi, dan item terlaris.
-- **⚙️ Pengaturan**: Konfigurasi batas stok rendah (low stock threshold) sesuai keinginan pengguna.
-- **🔐 Autentikasi Keamanan**: Sistem login yang aman dengan JWT (JSON Web Token) dan enkripsi password.
+- Dashboard for daily sales, transaction count, best-selling products, and low-stock alerts.
+- Product management with pricing, stock, categories, search, and soft deletion for sold products.
+- Point-of-sale checkout with server-side pricing and stock validation.
+- Stock adjustments and an auditable stock-movement history.
+- Monthly sales reports with revenue, transaction totals, gross profit, and best-selling products.
+- JWT-protected API endpoints and bcrypt password hashes.
 
-## 🛠️ Teknologi yang Digunakan
+## Status
 
-Aplikasi ini menggunakan stack monorepo sederhana yang menggabungkan Frontend dan Backend dalam satu project:
+This is an actively maintained MVP. It requires MySQL and is not yet offline-first; PWA/offline synchronization, multi-user roles, exports, automated database backups, and a daily report endpoint remain planned work. See the GitHub issues and project documentation for details.
 
-**Frontend:**
-- [React 19](https://react.dev/)
-- [Vite](https://vitejs.dev/)
-- [TailwindCSS v4](https://tailwindcss.com/)
-- [React Router DOM](https://reactrouter.com/)
-- [Framer Motion](https://www.framer.com/motion/)
-- [Lucide React](https://lucide.dev/) (Icons)
+## Tech stack
 
-**Backend & Database:**
-- [Node.js](https://nodejs.org/) & [Express.js](https://expressjs.com/)
-- [TypeScript](https://www.typescriptlang.org/)
-- [Prisma ORM](https://www.prisma.io/)
-- [JWT](https://jwt.io/) & [Bcrypt.js](https://www.npmjs.com/package/bcryptjs)
-- MySQL / PostgreSQL / SQLite
+- Frontend: React 19, Vite, Tailwind CSS, React Router.
+- Backend: Node.js, Express, TypeScript.
+- Data: MySQL and Prisma ORM.
 
----
+## Quick start
 
-## 🚀 Panduan Menjalankan Lokal (Development)
+Prerequisites: Node.js 22+, MySQL 8+, and npm.
 
-**Prasyarat:**
-- Node.js (direkomendasikan versi 18 atau terbaru)
-- Database SQL (berdasarkan konfigurasi provider Prisma Anda)
-
-### 1. Kloning Repository & Install Dependensi
 ```bash
-npm install
+git clone https://github.com/herdiansah/warung-app.git
+cd warung-app
+npm ci
+cp .env.example .env
 ```
 
-### 2. Konfigurasi Environment Variables
-Salin file `.env.example` menjadi `.env` dan sesuaikan URL database, JWT Secret, serta port:
-```env
-DATABASE_URL="file:./dev.db"  # Sesuaikan dengan provider database
-JWT_SECRET="rahasia_aman_anda"
-PORT=3000
-```
+Edit `.env` with a MySQL connection string and a unique `JWT_SECRET` that is at least 32 characters. The server defaults to `127.0.0.1:3000`; place it behind a reverse proxy when public access is needed.
 
-### 3. Setup Database (Migrasi & Seed)
-Sinkronisasikan skema Prisma ke database dan jalankan seeder:
+Apply migrations, create the first owner account, and start development mode:
+
 ```bash
-# Push schema ORM ke DB
-npx prisma db push
-
-# (Opsional) Generate Prisma Client
-npx prisma generate
-
-# Jalankan seed data untuk mengisi akun admin (dan produk sample)
-npm run prisma db seed
-```
-
-### 4. Jalankan Aplikasi Backend
-Aplikasi ini menjalankan backend server melalui Express (`server.ts`). Buka terminal dan jalankan:
-```bash
+npx prisma migrate dev
+ADMIN_EMAIL=owner@example.com ADMIN_PASSWORD='use-a-unique-12-plus-character-password' npm run prisma -- db seed
 npm run dev
-# Menjalankan TSX: server API berjalan di http://localhost:3000
 ```
 
-### 5. Jalankan Aplikasi Frontend (Opsional Jika Dipisah)
-*Catatan: Aplikasi ini menjalankan `tsx server.ts` yang biasanya dikonfigurasi untuk menyajikan endpoint API dan statis files, atau Vite dapat dijalankan terpisah tergantung konfigurasi Vite yang ada.*
+The development server runs at `http://127.0.0.1:3000`.
+
+## Quality checks
+
 ```bash
-npx vite
+npm test
+npm run lint
+npm run build
 ```
 
----
+## Security
 
-## 📂 Struktur Proyek
+- Never commit `.env`, database dumps, customer data, or credentials.
+- Initial owner credentials are provided only when running the seed command; the application does not create a default account.
+- Read [SECURITY.md](SECURITY.md) for vulnerability reporting and deployment guidance.
 
-- `src/` - Berisi seluruh kode Frontend (React, Pages, Components, Store).
-- `server.ts` - Berisi file utama Backend Server Express.
-- `prisma/` - Berisi Schema ORM Database (`schema.prisma`) dan script seeder (`seed.ts`).
-- `docs/` - Dokumentasi rinci proyek, rancangan fitur, log pengembangan, dll.
+## Contributing
 
-## 📝 Dokumentasi Terkait
-Penjelasan lebih mendetail mengenai alur sistem dan basis data dapat dipelajari di:
-- [Product Requirements Document (PRD)](./docs/PRD.md)
-- [Functional Specification Document (FSD)](./docs/FSD.md)
-- [Technical Specification Document (TSD)](./docs/TSD.md)
-- [Daftar Task & Roadmap Proyek](./docs/TASK_LIST.md)
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening an issue or pull request. Community participation is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
+## License
+
+Warung App is released under the [MIT License](LICENSE).

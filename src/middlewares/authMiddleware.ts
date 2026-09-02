@@ -17,8 +17,13 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
         return res.status(401).json({ error: "Access denied. No token provided." });
     }
 
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+        return res.status(500).json({ error: "Server authentication is not configured." });
+    }
+
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || "warung_super_secret_key_2026") as any;
+        const decoded = jwt.verify(token, secret) as any;
         req.user = decoded;
         next();
     } catch (error) {

@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import { PrismaClient } from "@prisma/client";
@@ -8,6 +9,7 @@ import jwt from "jsonwebtoken";
 import { authenticateToken, AuthRequest } from "./src/middlewares/authMiddleware";
 import { requestLogger, globalErrorHandler } from "./src/middlewares/errorHandler";
 import { logger } from "./src/utils/logger";
+import { CheckoutValidationError, validateCheckoutItems } from "./src/domain/transaction";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,27 +17,16 @@ const __dirname = path.dirname(__filename);
 const prisma = new PrismaClient();
 
 async function startServer() {
-  const app = express();
-  const PORT = 3000;
-
-  app.use(express.json());
-  app.use(requestLogger);
-
-  // --- Utility: Get Default User for MVP ---
-  async function getDefaultUser() {
-    let user = await prisma.user.findFirst();
-    if (!user) {
-      const hashedPassword = await bcrypt.hash("123456", 10);
-      user = await prisma.user.create({
-        data: {
-          name: "Admin",
-          email: "admin@warung.com",
-          password_hash: hashedPassword,
-        }
-      });
-    }
-    return user;
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+    throw new Error("JWT_SECRET must be configured and be at least 32 characters long");
   }
+
+  const app = express();
+  const PORT = Number(process.env.PORT || 3000);
+  const HOST = process.env.HOST || "127.0.0.1";
+
+  app.use(express.json({ limit: "100kb" }));
+  app.use(requestLogger);
 
   // --- Auth API ---
   app.post("/api/auth/login", async (req, res) => {
@@ -47,9 +38,7 @@ async function startServer() {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
-      // Check for 'dummy_hash' fallback mapping for backwards compatibility during testing
-      // (in case the seed script created an unhashed password)
-      const isMatch = await bcrypt.compare(password, user.password_hash) || (password === '123456' && (user.password_hash === '123456' || user.password_hash === 'dummy_hash'));
+      const isMatch = await bcrypt.compare(password, user.password_hash);
 
       if (!isMatch) {
         return res.status(401).json({ error: "Invalid email or password" });
@@ -57,7 +46,7 @@ async function startServer() {
 
       const token = jwt.sign(
         { id: user.id, name: user.name, email: user.email },
-        process.env.JWT_SECRET || "warung_super_secret_key_2026",
+        process.env.JWT_SECRET,
         { expiresIn: "7d" }
       );
 
@@ -237,7 +226,7 @@ async function startServer() {
   // Transactions
   app.post("/api/transactions", authenticateToken, async (req: AuthRequest, res) => {
     try {
-      const { items } = req.body;
+      const items = validateCheckoutItems(req.body?.items);
       const userId = req.user?.id;
       if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
@@ -258,9 +247,10 @@ async function startServer() {
 
           preparedItems.push({
             product_id: item.product_id,
-            qty: Number(item.qty),
+            qty: item.qty,
             price: Number(product.selling_price),
-            subtotal: subtotal,
+            unit_cost: Number(product.purchase_price),
+            subtotal,
             product_name: product.name,
           });
 
@@ -299,7 +289,8 @@ async function startServer() {
       res.json({ id: tx.id });
     } catch (err: any) {
       logger.error("POST /api/transactions failed", { error: err.message });
-      res.status(500).json({ error: err.message });
+      const status = err instanceof CheckoutValidationError || err.message?.includes("Stok tidak cukup") || err.message === "Product not found" ? 400 : 500;
+      res.status(status).json({ error: err.message });
     }
   });
 
@@ -517,10 +508,12 @@ async function startServer() {
     }
   });
 
-  app.get("/api/reports", authenticateToken, async (req, res) => {
+  app.get("/api/reports/monthly", authenticateToken, async (req, res) => {
     try {
       const { month } = req.query; // YYYY-MM
-      if (!month) return res.status(400).json({ error: "Month is required" });
+      if (typeof month !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+        return res.status(400).json({ error: "month must use YYYY-MM format" });
+      }
 
       const startDate = new Date(`${month}-01T00:00:00.000Z`);
       const nextMonthDate = new Date(startDate);
@@ -542,9 +535,8 @@ async function startServer() {
 
       // Profit and top products using raw query
       const profitData: any[] = await prisma.$queryRaw`
-        SELECT SUM((ti.price - p.purchase_price) * ti.qty) as profit
+        SELECT SUM((ti.price - ti.unit_cost) * ti.qty) as profit
         FROM TransactionItem ti
-        JOIN Product p ON ti.product_id = p.id
         JOIN Transaction t ON ti.transaction_id = t.id
         WHERE t.transaction_date >= ${startDate} AND t.transaction_date < ${nextMonthDate}
       `;
