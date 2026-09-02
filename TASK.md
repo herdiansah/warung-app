@@ -32,13 +32,13 @@
 - [x] TASK-M0-5: GitHub Actions CI workflow
 
 ## M1 — Transaction and inventory integrity
-*Status: Pending*
-- [ ] TASK-M1-1: Setup API Testing Infrastructure (Supertest + Vitest)
-- [ ] TASK-M1-2: Enforce input schemas for all write endpoints (return 400/401/403/404)
-- [ ] TASK-M1-3: Concurrency-Safe Stock Decrement (prevent overselling)
-- [ ] TASK-M1-4: Immutable Stock Audit Trail (actor, reason, reference_id in StockLog)
-- [ ] TASK-M1-5: Backfill historical cost at checkout (schema changes already applied)
-- [ ] TASK-M1-6: Timezone-Aware Daily & Monthly Reporting (Asia/Jakarta)
+*Status: Completed*
+- [x] TASK-M1-1: Setup API Testing Infrastructure (Supertest + Vitest)
+- [x] TASK-M1-2: Enforce input schemas for all write endpoints (return 400/401/403/404)
+- [x] TASK-M1-3: Concurrency-Safe Stock Decrement (prevent overselling)
+- [x] TASK-M1-4: Immutable Stock Audit Trail (actor, reason, reference_id in StockLog)
+- [x] TASK-M1-5: Backfill historical cost at checkout (schema changes already applied)
+- [x] TASK-M1-6: Timezone-Aware Daily & Monthly Reporting (Asia/Jakarta)
 
 ## M2 — Offline-first PWA POS
 *Status: Pending*

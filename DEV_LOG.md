@@ -42,3 +42,22 @@
 - **Problem:** `Setting` table missing from `schema.prisma` causing seed to fail.
 - **Solution:** Removed arbitrary `Setting` upsert from `seed.ts`.
 **Follow-ups:** None. Proceeding to M1.
+
+## [2026-09-02] TASK-M1: Transaction & Inventory Integrity
+**Role:** LD
+**Modules/Functions:** API Testing, Validation, Checkout Concurrency, Audit Log, Reporting
+**Files Touched:**
+- `server.ts`
+- `prisma/schema.prisma`
+- `package.json`
+- `tests/api/*.test.ts`
+**Tests/Validation:** 
+- Configured `supertest` + `vitest` with wrapper for Express.
+- Tests written and passed for: Login auth, Product validation, Checkout concurrent requests (overselling prevention), and TZ-aware Daily/Monthly reports.
+- TypeScript `tsc --noEmit` and Vite build passed.
+**Problems/Solutions:**
+- **Problem:** Concurrent checkout requests could oversell stock.
+- **Solution:** Replaced generic `findUnique` -> `update` with atomic `updateMany({ where: { stock: { gte: qty } }, data: { stock: { decrement: qty } } })`.
+- **Problem:** Date filters for reports defaulted to UTC causing wrong end-of-day offsets.
+- **Solution:** Integrated `date-fns-tz` forcing bounds to `Asia/Jakarta` explicitly.
+**Follow-ups:** None. Proceeding to M2.
