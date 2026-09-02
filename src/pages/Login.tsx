@@ -65,7 +65,7 @@ export default function Login() {
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 className="w-full px-4 py-3.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent shadow-sm text-gray-800 bg-gray-50/50"
-                                placeholder="admin@warung.com"
+                                placeholder="owner@example.com"
                                 required
                             />
                         </div>
@@ -106,9 +106,6 @@ export default function Login() {
                         </button>
                     </form>
 
-                    <div className="mt-8 text-center">
-                        <p className="text-xs text-gray-400">Demo: admin@warung.com / 123456</p>
-                    </div>
                 </div>
 
                 <p className="text-center text-xs text-gray-400 mt-6">

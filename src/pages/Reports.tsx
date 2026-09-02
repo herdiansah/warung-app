@@ -13,7 +13,7 @@ export default function Reports() {
   useEffect(() => {
     setLoading(true);
     const token = localStorage.getItem("warung_token");
-    fetch(`/api/reports?month=${monthFilter}`, {
+    fetch(`/api/reports/monthly?month=${monthFilter}`, {
       headers: {
         "Authorization": `Bearer ${token}`
       }
