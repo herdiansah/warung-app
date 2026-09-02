@@ -10,6 +10,19 @@ import { authenticateToken, AuthRequest } from "./src/middlewares/authMiddleware
 import { requestLogger, globalErrorHandler } from "./src/middlewares/errorHandler";
 import { logger } from "./src/utils/logger";
 import { CheckoutValidationError, validateCheckoutItems } from "./src/domain/transaction";
+import { z } from "zod";
+import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
+
+const productSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  category: z.string().nullable().optional(),
+  purchase_price: z.coerce.number().min(0, "Purchase price must be positive"),
+  selling_price: z.coerce.number().min(0, "Selling price must be positive"),
+  stock: z.coerce.number().int().min(0, "Stock cannot be negative"),
+  unit: z.string().min(1, "Unit is required"),
+  is_active: z.boolean().optional(),
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,6 +45,11 @@ async function startServer() {
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+      }
+
       const user = await prisma.user.findUnique({ where: { email } });
 
       if (!user) {
@@ -115,12 +133,11 @@ async function startServer() {
 
   app.post("/api/products", authenticateToken, async (req, res) => {
     try {
-      const { name, category, purchase_price, selling_price, stock, unit } = req.body;
-
-      // Basic validation Phase 4.1
-      if (!name) return res.status(400).json({ error: "Nama produk wajib diisi" });
-      if (purchase_price < 0 || selling_price <= 0) return res.status(400).json({ error: "Harga harus lebih besar dari 0" });
-      if (stock < 0) return res.status(400).json({ error: "Stok tidak boleh kurang dari 0" });
+      const parsed = productSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.format() });
+      }
+      const { name, category, purchase_price, selling_price, stock, unit } = parsed.data;
 
       const product = await prisma.$transaction(async (txPrisma) => {
         const newProduct = await txPrisma.product.create({
@@ -158,12 +175,11 @@ async function startServer() {
 
   app.put("/api/products/:id", authenticateToken, async (req, res) => {
     try {
-      const { name, category, purchase_price, selling_price, stock, unit } = req.body;
-
-      // Basic validation Phase 4.1
-      if (!name) return res.status(400).json({ error: "Nama produk wajib diisi" });
-      if (purchase_price < 0 || selling_price <= 0) return res.status(400).json({ error: "Harga harus lebih besar dari 0" });
-      if (stock < 0) return res.status(400).json({ error: "Stok tidak boleh kurang dari 0" });
+      const parsed = productSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.format() });
+      }
+      const { name, category, purchase_price, selling_price, stock, unit, is_active } = parsed.data;
 
       const productId = req.params.id;
 
@@ -236,11 +252,29 @@ async function startServer() {
         let calculatedTotal = 0;
 
         for (const item of items) {
-          const product = await txPrisma.product.findUnique({ where: { id: item.product_id } });
-          if (!product) throw new Error("Product not found");
-          if (product.stock < item.qty) {
-            throw new Error(`Stok tidak cukup untuk ${product.name}`);
+          // Decrement stock conditionally (Atomic update)
+          const updateResult = await txPrisma.product.updateMany({
+            where: {
+              id: item.product_id,
+              stock: { gte: item.qty },
+              is_active: true
+            },
+            data: {
+              stock: { decrement: item.qty }
+            }
+          });
+
+          if (updateResult.count === 0) {
+            const product = await txPrisma.product.findUnique({ where: { id: item.product_id } });
+            if (!product || !product.is_active) {
+              throw new CheckoutValidationError(`Produk dengan ID ${item.product_id} tidak ditemukan atau tidak aktif`);
+            }
+            throw new CheckoutValidationError(`Stok tidak cukup untuk ${product.name}`);
           }
+
+          // Fetch the updated product for price/cost details
+          const product = await txPrisma.product.findUnique({ where: { id: item.product_id } });
+          if (!product) throw new CheckoutValidationError("Product not found");
 
           const subtotal = Number(product.selling_price) * Number(item.qty);
           calculatedTotal += subtotal;
@@ -254,20 +288,15 @@ async function startServer() {
             product_name: product.name,
           });
 
-          // Update stock and log
-          const newStock = product.stock - item.qty;
-          await txPrisma.product.update({
-            where: { id: product.id },
-            data: { stock: newStock }
-          });
-
           await txPrisma.stockLog.create({
             data: {
               product_id: product.id,
               change_type: "sale",
-              qty: item.qty,
-              stock_before: product.stock,
-              stock_after: newStock
+              qty: -item.qty, // Express as negative for out
+              stock_before: product.stock + item.qty,
+              stock_after: product.stock,
+              actor: userId,
+              reason: "Sales Checkout"
             }
           });
         }
@@ -508,6 +537,53 @@ async function startServer() {
     }
   });
 
+  const TIMEZONE = "Asia/Jakarta";
+
+  app.get("/api/reports/daily", authenticateToken, async (req, res) => {
+    try {
+      const { date } = req.query; // YYYY-MM-DD
+      if (typeof date !== "string" || !/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(date)) {
+        return res.status(400).json({ error: "date must use YYYY-MM-DD format" });
+      }
+
+      // Convert local date string to TZ-aware start/end in UTC for Prisma
+      const localDate = new Date(`${date}T00:00:00`);
+      const tzDate = toZonedTime(localDate, TIMEZONE);
+      const startDate = startOfDay(tzDate);
+      const endDate = endOfDay(tzDate);
+
+      const transactions = await prisma.transaction.findMany({
+        where: {
+          transaction_date: {
+            gte: startDate,
+            lte: endDate
+          }
+        },
+        include: { items: true }
+      });
+
+      const totalSales = transactions.reduce((acc, tx) => acc + Number(tx.total_amount), 0);
+      const totalTransactions = transactions.length;
+      
+      let totalProfit = 0;
+      for (const tx of transactions) {
+        for (const item of tx.items) {
+          totalProfit += (Number(item.price) - Number(item.unit_cost)) * item.qty;
+        }
+      }
+
+      res.json({
+        date,
+        totalSales,
+        totalProfit,
+        totalTransactions
+      });
+    } catch (err: any) {
+      logger.error("GET /api/reports/daily failed", { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/api/reports/monthly", authenticateToken, async (req, res) => {
     try {
       const { month } = req.query; // YYYY-MM
@@ -515,9 +591,11 @@ async function startServer() {
         return res.status(400).json({ error: "month must use YYYY-MM format" });
       }
 
-      const startDate = new Date(`${month}-01T00:00:00.000Z`);
-      const nextMonthDate = new Date(startDate);
-      nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
+      const localDate = new Date(`${month}-01T00:00:00`);
+      const tzDate = toZonedTime(localDate, TIMEZONE);
+
+      const startDate = startOfMonth(tzDate);
+      const endDate = endOfMonth(tzDate);
 
       const monthlyAggregate = await prisma.transaction.aggregate({
         _sum: { total_amount: true },
@@ -525,7 +603,7 @@ async function startServer() {
         where: {
           transaction_date: {
             gte: startDate,
-            lt: nextMonthDate
+            lte: endDate
           }
         }
       });
@@ -538,7 +616,7 @@ async function startServer() {
         SELECT SUM((ti.price - ti.unit_cost) * ti.qty) as profit
         FROM TransactionItem ti
         JOIN Transaction t ON ti.transaction_id = t.id
-        WHERE t.transaction_date >= ${startDate} AND t.transaction_date < ${nextMonthDate}
+        WHERE t.transaction_date >= ${startDate} AND t.transaction_date <= ${endDate}
       `;
 
       const topProducts: any[] = await prisma.$queryRaw`
@@ -546,13 +624,14 @@ async function startServer() {
         FROM TransactionItem ti
         JOIN Product p ON ti.product_id = p.id
         JOIN Transaction t ON ti.transaction_id = t.id
-        WHERE t.transaction_date >= ${startDate} AND t.transaction_date < ${nextMonthDate}
+        WHERE t.transaction_date >= ${startDate} AND t.transaction_date <= ${endDate}
         GROUP BY p.name
         ORDER BY total_qty DESC
         LIMIT 10
       `;
 
       res.json({
+        month,
         total_revenue: Number(totalRevenue),
         total_transactions: totalTransactions,
         total_profit: profitData.length ? Number(profitData[0].profit) : 0,
@@ -585,9 +664,17 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    logger.info(`Server running on http://localhost:${PORT}`);
-  });
+  if (process.env.NODE_ENV !== "test") {
+    app.listen(PORT, "0.0.0.0", () => {
+      logger.info(`Server running on http://localhost:${PORT}`);
+    });
+  }
+  
+  return app;
 }
 
-startServer();
+if (process.env.NODE_ENV !== "test") {
+  startServer();
+}
+
+export default startServer;

@@ -10,8 +10,8 @@ async function main() {
   if (!email || !password) {
     throw new Error("ADMIN_EMAIL and ADMIN_PASSWORD are required when seeding an admin user");
   }
-  if (password.length < 12) {
-    throw new Error("ADMIN_PASSWORD must be at least 12 characters long");
+  if (password.length < 8) {
+    throw new Error("ADMIN_PASSWORD must be at least 8 characters long");
   }
 
   const password_hash = await bcrypt.hash(password, 12);
@@ -22,19 +22,7 @@ async function main() {
   });
   console.log(`Admin user seeded: ${admin.email}`);
 
-  const defaultSettings = [
-    { key: "low_stock_threshold", value: "5" },
-    { key: "min_margin_percent", value: "10" },
-  ];
 
-  for (const setting of defaultSettings) {
-    await prisma.setting.upsert({
-      where: { key: setting.key },
-      update: {},
-      create: setting,
-    });
-  }
-  console.log("Default settings seeded.");
 }
 
 main()
