@@ -36,6 +36,7 @@ export function Layout() {
           return (
             <Link
               key={item.path}
+              data-testid={`nav-${item.path.replace("/", "")}`}
               to={item.path}
               className={`flex flex-col items-center p-1.5 rounded-xl transition-all ${isActive
                   ? "text-emerald-600"
@@ -74,6 +75,7 @@ export function Layout() {
             return (
               <Link
                 key={item.path}
+                data-testid={`nav-${item.path.replace("/", "")}`}
                 to={item.path}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isActive
                     ? "bg-emerald-50 text-emerald-700 font-semibold shadow-sm"

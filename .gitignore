@@ -2,6 +2,9 @@ node_modules/
 build/
 dist/
 coverage/
+test-results/
+playwright-report/
+dev-dist/
 .DS_Store
 *.log
 logs/*

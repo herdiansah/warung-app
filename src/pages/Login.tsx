@@ -61,6 +61,7 @@ export default function Login() {
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
                             <input
+                                data-testid="login-email"
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
@@ -74,6 +75,7 @@ export default function Login() {
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Password</label>
                             <div className="relative">
                                 <input
+                                    data-testid="login-password"
                                     type={showPassword ? "text" : "password"}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
@@ -92,6 +94,7 @@ export default function Login() {
                         </div>
 
                         <button
+                            data-testid="login-submit"
                             type="submit"
                             disabled={loading}
                             className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 text-white font-bold py-4 px-4 rounded-xl hover:from-emerald-700 hover:to-emerald-800 disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg flex justify-center items-center h-14 active:scale-[0.98]"
