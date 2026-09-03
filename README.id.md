@@ -2,27 +2,29 @@
 
 Warung App adalah aplikasi sumber terbuka untuk pencatatan penjualan, inventaris, dan keuntungan bagi usaha mikro-ritel Indonesia ("warung") dan toko kelontong. Dirancang untuk membuat operasional toko sehari-hari mudah diakses tanpa keahlian akuntansi.
 
+Baca versi bahasa Inggris di [README.md](README.md).
+
 ## Fitur saat ini
 
 - Dashboard penjualan harian, jumlah transaksi, produk terlaris, dan peringatan stok menipis.
-- Manajemen produk dengan harga, stok, kategori, pencarian, dan penghapusan lunak untuk produk yang sudah terjual.
-- Kasir (POS) dengan validasi harga dan stok di sisi server.
+- Manajemen produk dengan harga, stok, kategori, pencarian, penghapusan lunak untuk produk yang sudah terjual, dan impor massal dari XLSX/CSV.
+- Kasir (POS) dengan validasi harga dan stok di sisi server, plus dukungan barcode scanner.
+- Offline-first PWA: transaksi checkout antre di IndexedDB dan disinkronkan dengan idempotency key saat koneksi kembali.
 - Penyesuaian stok dan riwayat pergerakan stok yang dapat diaudit.
 - Laporan penjualan bulanan dengan pendapatan, total transaksi, laba kotor, dan produk terlaris.
-- Endpoint API terproteksi JWT dan hash password bcrypt.
-- Dukungan barcode scanner untuk input dan lookup produk.
-- Impor data massal dari XLSX/CSV dengan validasi.
-- Buku kas (penerimaan/pengeluaran) dan piutang pelanggan.
 - Laporan harian (tutup kasir) dengan selisih dan persetujuan.
-- Ekspor CSV/XLSX untuk produk, stok, penjualan.
-- Dukungan multi-peran (owner, manager, cashier) dengan otorisasi server-side.
-- Catatan audit untuk perubahan sensitif.
-- Pembatalan transaksi (void) dengan alasan.
-- Mode offline-first PWA (sinkronisasi antrean saat koneksi kembali).
+- Alur pembelian/restock dengan pencatatan kas keluar otomatis saat kulakan.
+- Buku kas (penerimaan/pengeluaran) dan piutang pelanggan.
+- Pembatalan transaksi (void) dengan alasan yang tercatat.
+- Dukungan multi-peran (owner, manager, cashier) dengan otorisasi server-side dan catatan audit.
+- Ekspor CSV/XLSX untuk produk, stok, penjualan, dan laporan.
+- Endpoint API terproteksi JWT dan hash password bcrypt.
+- Endpoint kesehatan: liveness (`/api/health`) dan readiness (`/api/health/ready`).
+- Logging terstruktur dengan filter `LOG_LEVEL`, output JSON, dan integrasi webhook error-tracking.
 
 ## Status
 
-MVP yang dikelola secara aktif. Membutuhkan MySQL. Lihat [CHANGELOG.md](CHANGELOG.md) untuk riwayat rilis dan [MILESTONES.md](docs/MILESTONES.md) untuk rencana pengembangan.
+Dikelola secara aktif. Versi 1.0.0. Membutuhkan MySQL (kompatibel dengan TiDB Serverless). Lihat [CHANGELOG.md](CHANGELOG.md) untuk riwayat rilis dan [MILESTONES.md](docs/MILESTONES.md) untuk rencana pengembangan.
 
 ## Tumpukan teknologi
 
@@ -47,7 +49,7 @@ Jalankan migrasi, buat akun owner pertama, dan mulai mode pengembangan:
 
 ```bash
 npx prisma migrate dev
-ADMIN_EMAIL=owner@example.com ADMIN_PASSWORD='<password-unik-12-karakter>' npm run prisma -- db seed
+ADMIN_EMAIL=owner@example.com ADMIN_PASSWORD='use-a-unique-12-plus-character-password' npx prisma db seed
 npm run dev
 ```
 
@@ -56,19 +58,34 @@ Server pengembangan berjalan di `http://127.0.0.1:3000`.
 ## Pemeriksaan kualitas
 
 ```bash
-npm test
+npm test         # API integration tests (Vitest)
+npm run test:e2e # Playwright E2E smoke tests
 npm run lint
 npm run build
 ```
 
-## Docker (produksi)
+## Deployment produksi
+
+Warung App menyediakan Docker image produksi (multi-stage build, runtime non-root, HEALTHCHECK) dan contoh `docker-compose.yml`:
 
 ```bash
-# Pastikan .env sudah diisi, lalu:
+# Isi .env dulu, lalu:
 docker compose up -d --build
 ```
 
-Lihat [DEPLOYMENT.md](docs/DEPLOYMENT.md) untuk panduan lengkap.
+Untuk deployment bare-metal, backup, drill restore, upgrade, dan rollback, lihat [DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+## Logging
+
+| Variabel | Default | Deskripsi |
+|----------|---------|-----------|
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
+| `LOG_FORMAT` | `pretty` | `pretty` (console berwarna + `logs/app.log`) atau `json` (stdout, siap collector) |
+| `ERROR_WEBHOOK_URL` | (kosong) | Mengirim setiap log level error sebagai JSON ke URL ini (mis. ingest Sentry-compatible, Slack webhook) |
+
+## Backup
+
+Jalankan `scripts/backup.sh` secara manual, via cron, atau di Docker untuk menghasilkan dump MySQL terkompresi gzip (opsional terenkripsi age) dengan retensi; `scripts/restore.sh` untuk memulihkannya. Drill lengkap di [DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Keamanan
 
@@ -78,7 +95,7 @@ Lihat [DEPLOYMENT.md](docs/DEPLOYMENT.md) untuk panduan lengkap.
 
 ## Berkontribusi
 
-Baca [CONTRIBUTING.md](CONTRIBUTING.md) sebelum membuka issue atau pull request. Partisipasi komunitas diatur oleh [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+Baca [CONTRIBUTING.md](CONTRIBUTING.md) sebelum membuka issue atau pull request. Maintainer: lihat [MAINTAINERS.md](docs/MAINTAINERS.md). Partisipasi komunitas diatur oleh [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## Lisensi
 

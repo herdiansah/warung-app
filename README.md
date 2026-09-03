@@ -49,7 +49,7 @@ Apply migrations, create the first owner account, and start development mode:
 
 ```bash
 npx prisma migrate dev
-ADMIN_EMAIL=owner@example.com ADMIN_PASSWORD='use-a-unique-12-plus-character-password' npm run prisma -- db seed
+ADMIN_EMAIL=owner@example.com ADMIN_PASSWORD='use-a-unique-12-plus-character-password' npx prisma db seed
 npm run dev
 ```
 

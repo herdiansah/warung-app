@@ -20,7 +20,7 @@ cp .env.example .env
 
 # Migrate and seed
 npx prisma migrate deploy
-ADMIN_EMAIL=owner@example.com ADMIN_PASSWORD='<password>' npm run seed
+ADMIN_EMAIL=owner@example.com ADMIN_PASSWORD='<password>' npx prisma db seed
 
 # Build frontend
 npm run build
@@ -141,7 +141,7 @@ docker compose exec app npx prisma migrate deploy
 
 ## Rollback
 
-1. Checkout previous tag: `git checkout v0.5.0`
+1. Checkout previous tag: `git checkout v1.0.0`
 2. Install deps: `npm ci`
 3. Roll back the last migration: `npx prisma migrate reset`
 4. Optionally restore a database backup

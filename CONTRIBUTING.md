@@ -15,7 +15,7 @@ npm ci
 cp .env.example .env
 # Set DATABASE_URL and a JWT_SECRET of at least 32 characters in .env
 npx prisma migrate dev
-ADMIN_EMAIL=owner@example.com ADMIN_PASSWORD='replace-with-a-unique-12-plus-character-password' npm run prisma -- db seed
+ADMIN_EMAIL=owner@example.com ADMIN_PASSWORD='replace-with-a-unique-12-plus-character-password' npx prisma db seed
 npm run dev
 ```
 
