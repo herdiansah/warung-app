@@ -22,7 +22,50 @@
 
 ---
 
-## [2026-09-02] TASK-M0: OSS Readiness & DB Setup
+## [2026-09-03] TASK-M4-1/2: XLSX Export & Restock Workflow
+**Role:** LD / QA
+**Modules/Functions:** Reports export, Products kulakan
+**Files Touched:** `server.ts`, `src/pages/Reports.tsx`, `src/pages/Products.tsx`
+**Tests/Validation:** 13/13 vitest pass; lint+build pass
+**Problems/Solutions:** Seed admin lacked explicit owner role after M3 RBAC → fixed seed.ts.
+
+## [2026-09-03] TASK-M4-3a: Customer Receivables Ledger (Utang/Piutang)
+**Role:** LD / FE / QA
+**Modules/Functions:** Customer CRUD, credit checkout, payment recording
+**Files Touched:** `prisma/schema.prisma` (Customer, CustomerPayment, Transaction.payment_method/customer_id), `server.ts`, `src/pages/Customers.tsx`, `src/pages/POS.tsx`, `src/App.tsx`, `src/components/Layout.tsx`, `tests/api/customers.test.ts`
+**Tests/Validation:** 9 new API tests; 22/22 total pass
+**Problems/Solutions:** Zod v4 uses `.issues` not `.errors`; authorizeRole takes an array.
+
+## [2026-09-03] TASK-M4-3b: Cash Movement Ledger (Buku Kas)
+**Role:** LD / FE / QA
+**Modules/Functions:** Cash in/out, summary balance, kulakan auto-cash-out
+**Files Touched:** `prisma/schema.prisma` (CashMovement), `server.ts`, `src/pages/Cash.tsx`, `tests/api/cash.test.ts`
+**Tests/Validation:** 7 new API tests; 29/29 pass
+**Problems/Solutions:** LSP Prisma type errors were stale cache — verified with `tsc --noEmit`.
+
+## [2026-09-03] TASK-M4-4: Daily Cashier Closing (Tutup Kasir)
+**Role:** LD / FE / QA
+**Modules/Functions:** Expected cash reconciliation, upsert closing, history
+**Files Touched:** `prisma/schema.prisma` (DailyClosing), `server.ts`, `src/pages/DailyClosing.tsx`, `tests/api/closings.test.ts`
+**Tests/Validation:** 5 new API tests; 34/34 pass
+**Problems/Solutions:** Test expected-cash went negative (kulakan > sales in test data) → top up kas in beforeAll before asserting positive actual_cash.
+
+## [2026-09-03] TASK-M4-5/6: Barcode Scanner Support & Data Import
+**Role:** LD / FE / QA
+**Modules/Functions:** Barcode field + unique index, barcode lookup API, POS scan input, XLSX/CSV import with validation
+**Files Touched:**
+- `prisma/schema.prisma` (Product.barcode, migration `add_product_barcode`)
+- `server.ts` (GET /api/products/barcode/:code, POST /api/import/products, barcode on create/update, P2002 → 400)
+- `src/pages/Products.tsx` (barcode field in form, Import button + error rows panel)
+- `src/pages/POS.tsx` (scan input: barcode + Enter → add to cart)
+- `tests/api/barcode-import.test.ts` (8 new tests)
+**Tests/Validation:** lint + build pass; 42/42 tests pass
+**Problems/Solutions:**
+- Duplicate `/api/products/barcode/:code` route existed (one with invalid `findUnique` + `is_active`) → removed the stale duplicate.
+- Duplicate barcode create raised P2002 → caught and mapped to 400 "Barcode sudah digunakan".
+- Tests used fixed barcodes, colliding with leftover DB rows across runs → unique per-run barcode prefix + afterAll cleanup.
+- Import endpoint normalizes Indonesian/English headers, coerces numeric strings, upserts by barcode (or name), reports per-row errors with Excel row numbers (header = row 1).
+**Follow-ups:** None. M4 complete.
 **Role:** LD / QA
 **Modules/Functions:** Database config, Environment, Auth Security, CI
 **Files Touched:**

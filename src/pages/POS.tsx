@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle2, Barcode } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { addCheckoutToOutbox } from "../utils/offlineQueue";
 
@@ -7,6 +7,9 @@ export default function POS() {
   const { showToast } = useToast();
   const [products, setProducts] = useState<any[]>([]);
   const [search, setSearch] = useState("");
+  const [scanCode, setScanCode] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const scanInputRef = useRef<HTMLInputElement>(null);
   const [cart, setCart] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -172,6 +175,35 @@ export default function POS() {
     }
   };
 
+  const handleScanBarcode = async () => {
+    const code = scanCode.trim();
+    if (!code) return;
+    setScanning(true);
+    const token = localStorage.getItem("warung_token");
+    try {
+      const res = await fetch(`/api/products/barcode/${encodeURIComponent(code)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        if (res.status === 404) {
+          showToast("Produk dengan barcode ini tidak ditemukan", "error");
+        } else {
+          showToast("Gagal mencari barcode", "error");
+        }
+        setScanCode("");
+        return;
+      }
+      const product = await res.json();
+      addToCart(product);
+      setScanCode("");
+      if (scanInputRef.current) scanInputRef.current.focus();
+    } catch (err) {
+      showToast("Gagal menghubungi server", "error");
+    } finally {
+      setScanning(false);
+    }
+  };
+
   const filteredProducts = products.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -201,6 +233,24 @@ export default function POS() {
       {/* Kiri: Daftar Produk */}
       <div className="flex-1 flex flex-col bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-4 border-b border-gray-100">
+          <div className="relative">
+            <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              ref={scanInputRef}
+              type="text"
+              placeholder="Scan barcode lalu Enter..."
+              value={scanCode}
+              onChange={(e) => setScanCode(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleScanBarcode();
+                }
+              }}
+              disabled={scanning}
+              className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50 mb-2"
+            />
+          </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input

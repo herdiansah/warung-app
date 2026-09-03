@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, Search, X, Minus, Package, History, AlertTriangle, PackagePlus } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Plus, Edit, Trash2, Search, X, Minus, Package, History, AlertTriangle, PackagePlus, Upload, Loader2 } from "lucide-react";
 import { StockHistoryTab } from "../components/StockHistoryTab";
 import { useToast } from "../components/Toast";
 
@@ -12,6 +12,7 @@ export default function Products() {
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [formData, setFormData] = useState({
     name: "",
+    barcode: "",
     category: "",
     purchase_price: "",
     selling_price: "",
@@ -24,6 +25,41 @@ export default function Products() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [restockTarget, setRestockTarget] = useState<any>(null);
   const [restockForm, setRestockForm] = useState({ qty: "", cost_per_unit: "", supplier: "", receipt_ref: "" });
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importResult, setImportResult] = useState<{ created: number; updated: number; skipped: number; errors: { row: number; error: string }[] } | null>(null);
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportResult(null);
+    const token = localStorage.getItem("warung_token");
+    try {
+      const { read, utils } = await import("xlsx");
+      const data = await file.arrayBuffer();
+      const wb = read(data);
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = utils.sheet_to_json(ws, { defval: "" });
+      if (rows.length === 0) throw new Error("File kosong atau tidak ada data");
+
+      const res = await fetch("/api/import/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ rows }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Gagal import");
+      setImportResult(result);
+      if (result.created > 0 || result.updated > 0) fetchProducts();
+      showToast(`Import selesai: ${result.created} baru, ${result.updated} update, ${result.skipped} skip`, result.skipped > 0 ? "error" : "success");
+    } catch (err: any) {
+      showToast(err.message || "Gagal import file", "error");
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   const adjustStock = async (id: number, diff: number) => {
     const token = localStorage.getItem("warung_token");
@@ -92,6 +128,7 @@ export default function Products() {
       setEditingProduct(product);
       setFormData({
         name: product.name,
+        barcode: product.barcode || "",
         category: product.category || "",
         purchase_price: product.purchase_price.toString(),
         selling_price: product.selling_price.toString(),
@@ -102,6 +139,7 @@ export default function Products() {
       setEditingProduct(null);
       setFormData({
         name: "",
+        barcode: "",
         category: "",
         purchase_price: "",
         selling_price: "",
@@ -220,15 +258,38 @@ export default function Products() {
         </div>
 
         {activeTab === "products" && (
-          <button
-            onClick={() => handleOpenModal()}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 shadow-sm transition-colors w-full sm:w-auto justify-center"
-          >
-            <Plus className="w-5 h-5" />
-            Tambah Produk
-          </button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 px-4 py-2 rounded-xl font-medium flex items-center gap-2 shadow-sm transition-colors justify-center"
+            >
+              {importing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
+              Import
+            </button>
+            <button
+              onClick={() => handleOpenModal()}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 shadow-sm transition-colors justify-center"
+            >
+              <Plus className="w-5 h-5" />
+              Tambah Produk
+            </button>
+          </div>
         )}
       </header>
+
+      <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} className="hidden" />
+
+      {importResult && importResult.errors.length > 0 && (
+        <div className="mb-4 p-4 rounded-xl bg-amber-50 border border-amber-200">
+          <p className="text-sm font-semibold text-amber-800 mb-2">Beberapa baris dilewati (row excel dimulai dari 2):</p>
+          <ul className="space-y-1 max-h-40 overflow-y-auto">
+            {importResult.errors.map((err, i) => (
+              <li key={i} className="text-xs text-amber-700">Row {err.row}: {err.error}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {activeTab === "stocks" ? (
         <StockHistoryTab />
@@ -391,6 +452,17 @@ export default function Products() {
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   placeholder="Contoh: Makanan"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Barcode (Opsional)</label>
+                <input
+                  type="text"
+                  value={formData.barcode}
+                  onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                  className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="Scan atau ketik kode barcode"
                 />
               </div>
 
