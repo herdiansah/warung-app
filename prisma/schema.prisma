@@ -29,6 +29,7 @@ model User {
 
   transactions  Transaction[]
   cash_movements CashMovement[]
+  daily_closings DailyClosing[]
 }
 
 model Setting {
@@ -92,6 +93,19 @@ model CashMovement {
   user       User     @relation(fields: [created_by], references: [id])
 
   @@index([moved_at])
+}
+
+model DailyClosing {
+  id            String   @id @default(uuid())
+  date          String   @unique // YYYY-MM-DD (Asia/Jakarta)
+  expected_cash Decimal
+  actual_cash   Decimal
+  difference    Decimal
+  note          String?
+  closed_by     String
+  user          User     @relation(fields: [closed_by], references: [id])
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
 }
 
 model Transaction {
