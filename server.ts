@@ -1,6 +1,5 @@
 import "dotenv/config";
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import { PrismaClient } from "@prisma/client";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -42,6 +41,22 @@ async function startServer() {
 
   app.use(express.json({ limit: "100kb" }));
   app.use(requestLogger);
+
+  // --- Health & Readiness ---
+  // Liveness: container is up. Readiness: DB reachable.
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() });
+  });
+
+  app.get("/api/health/ready", async (req, res) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({ status: "ready", db: "up", timestamp: new Date().toISOString() });
+    } catch (err: any) {
+      logger.error("Readiness check failed", { error: err.message });
+      res.status(503).json({ status: "not_ready", db: "down", timestamp: new Date().toISOString() });
+    }
+  });
 
   // --- Auth API ---
   app.post("/api/auth/login", async (req, res) => {
@@ -1505,6 +1520,7 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

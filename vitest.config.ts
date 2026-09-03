@@ -5,6 +5,7 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     fileParallelism: false,
-    setupFiles: ['./tests/api/setup.ts']
+    setupFiles: ['./tests/api/setup.ts'],
+    exclude: ['node_modules/**', 'dist/**', 'tests/e2e/**']
   }
 });
