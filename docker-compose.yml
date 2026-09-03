@@ -1,0 +1,56 @@
+# Production deployment example: Warung App + MySQL
+#
+# Usage:
+#   1. cp .env.example .env   and fill DATABASE_URL, JWT_SECRET, ADMIN_*
+#   2. docker compose up -d --build
+#
+# The app is served on http://127.0.0.1:3000. Put a reverse proxy
+# (Nginx/Caddy) in front when public access is needed.
+#
+# Note: MYSQL_* values below are used by the bundled MySQL only.
+# The DATABASE_URL in .env should point at this MySQL service when
+# running the stack as-is.
+
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-warung}
+      MYSQL_USER: ${MYSQL_USER:-warung}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me-warung}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-change-me-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-mysql://${MYSQL_USER:-warung}:${MYSQL_PASSWORD:-change-me-warung}@db:3306/${MYSQL_DATABASE:-warung}}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      HOST: 0.0.0.0
+      PORT: 3000
+      NODE_ENV: production
+      LOG_FORMAT: json
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  db_data:

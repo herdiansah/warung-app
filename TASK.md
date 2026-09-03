@@ -64,8 +64,8 @@
 - [x] TASK-M4-6: Data import with validation (XLSX/CSV → upsert by barcode/name, row error reporting)
 
 ## M5 — Production hardening and OSS growth
-*Status: Pending*
-- [ ] TASK-M5-1: Docker production image & Compose
-- [ ] TASK-M5-2: Scheduled backups & restore drill
-- [ ] TASK-M5-3: Structured logs & error tracking
-- [ ] TASK-M5-4: Multilingual documentation (ID/EN)
+*Status: Completed*
+- [x] TASK-M5-1: Docker production image & Compose
+- [x] TASK-M5-2: Scheduled backups & restore drill
+- [x] TASK-M5-3: Structured logs & error tracking
+- [x] TASK-M5-4: Multilingual documentation (ID/EN)
