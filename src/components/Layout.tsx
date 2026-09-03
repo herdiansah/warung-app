@@ -8,7 +8,7 @@ export function Layout() {
   const user = userStr ? JSON.parse(userStr) : null;
 
   const navItems = [
-    { path: "/dashboard", label: "Dashboard", icon: Home },
+    { path: "/", label: "Dashboard", icon: Home },
     { path: "/pos", label: "Kasir", icon: ShoppingCart },
     { path: "/products", label: "Produk", icon: Package },
     { path: "/history", label: "Riwayat", icon: History },

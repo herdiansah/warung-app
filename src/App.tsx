@@ -30,6 +30,7 @@ export default function App() {
         </ProtectedRoute>
       }>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/products" element={<Products />} />
         <Route path="/pos" element={<POS />} />
         <Route path="/history" element={<History />} />
