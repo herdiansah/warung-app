@@ -48,11 +48,11 @@
 - [x] TASK-M2-4: Sync queue states & conflict resolution screen
 
 ## M3 — Store accounts, roles, and auditability
-*Status: Pending*
-- [ ] TASK-M3-1: Add `Store` ownership & roles (owner, manager, cashier)
-- [ ] TASK-M3-2: Server-side role authorization
-- [ ] TASK-M3-3: Transaction void/reversal workflow
-- [ ] TASK-M3-4: Append-only audit log for sensitive changes
+*Status: Completed*
+- [x] TASK-M3-1: Add `Store` ownership & roles (owner, manager, cashier)
+- [x] TASK-M3-2: Server-side role authorization
+- [x] TASK-M3-3: Transaction void/reversal workflow
+- [x] TASK-M3-4: Append-only audit log for sensitive changes
 
 ## M4 — Operational reporting and business workflows
 *Status: Pending*
