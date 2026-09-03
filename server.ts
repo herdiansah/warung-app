@@ -1101,6 +1101,121 @@ async function startServer() {
     }
   });
 
+  // --- Daily Closing (Tutup Kasir) ---
+  // Expected cash for a Jakarta day = cash sales + customer payments + cash in - cash out
+  async function computeExpectedCash(dateStr: string) {
+    const localDate = new Date(`${dateStr}T00:00:00`);
+    const tzDate = toZonedTime(localDate, TIMEZONE);
+    const sd = startOfDay(tzDate);
+    const ed = endOfDay(tzDate);
+
+    const [cashSales, payments, movIn, movOut] = await Promise.all([
+      prisma.transaction.aggregate({
+        _sum: { total_amount: true },
+        where: { status: "completed", payment_method: "cash", transaction_date: { gte: sd, lte: ed } },
+      }),
+      prisma.customerPayment.aggregate({
+        _sum: { amount: true },
+        where: { created_at: { gte: sd, lte: ed } },
+      }),
+      prisma.cashMovement.aggregate({
+        _sum: { amount: true },
+        where: { type: "in", moved_at: { gte: sd, lte: ed } },
+      }),
+      prisma.cashMovement.aggregate({
+        _sum: { amount: true },
+        where: { type: "out", moved_at: { gte: sd, lte: ed } },
+      }),
+    ]);
+
+    const salesCash = Number(cashSales._sum.total_amount || 0);
+    const paymentsIn = Number(payments._sum.amount || 0);
+    const cashIn = Number(movIn._sum.amount || 0);
+    const cashOut = Number(movOut._sum.amount || 0);
+    return {
+      sales_cash: salesCash,
+      payments_in: paymentsIn,
+      cash_in: cashIn,
+      cash_out: cashOut,
+      expected: salesCash + paymentsIn + cashIn - cashOut,
+    };
+  }
+
+  app.get("/api/closings/:date", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const { date } = req.params;
+      if (!/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(date)) {
+        return res.status(400).json({ error: "date must use YYYY-MM-DD format" });
+      }
+      const expected = await computeExpectedCash(date);
+      const closing = await prisma.dailyClosing.findUnique({
+        where: { date },
+        include: { user: { select: { name: true } } },
+      });
+      res.json({ date, ...expected, closing });
+    } catch (err: any) {
+      logger.error("GET /api/closings failed", { error: err.message });
+      res.status(500).json({ error: "Gagal mengambil data tutup kasir" });
+    }
+  });
+
+  app.post("/api/closings", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const parsed = z.object({
+        date: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, "Tanggal harus format YYYY-MM-DD"),
+        actual_cash: z.number().min(0, "Uang fisik tidak boleh negatif"),
+        note: z.string().max(200).optional().nullable(),
+      }).safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
+      }
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+      const { date, actual_cash, note } = parsed.data;
+      const expected = await computeExpectedCash(date);
+      const difference = actual_cash - expected.expected;
+
+      const closing = await prisma.dailyClosing.upsert({
+        where: { date },
+        create: {
+          date,
+          expected_cash: expected.expected,
+          actual_cash,
+          difference,
+          note: note || null,
+          closed_by: userId,
+        },
+        update: {
+          expected_cash: expected.expected,
+          actual_cash,
+          difference,
+          note: note || null,
+          closed_by: userId,
+        },
+      });
+      logger.success("Daily closing saved", { date, difference });
+      res.json(closing);
+    } catch (err: any) {
+      logger.error("POST /api/closings failed", { error: err.message });
+      res.status(500).json({ error: "Gagal menyimpan tutup kasir" });
+    }
+  });
+
+  app.get("/api/closings", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const closings = await prisma.dailyClosing.findMany({
+        orderBy: { date: "desc" },
+        take: 30,
+        include: { user: { select: { name: true } } },
+      });
+      res.json(closings);
+    } catch (err: any) {
+      logger.error("GET /api/closings failed", { error: err.message });
+      res.status(500).json({ error: "Gagal mengambil riwayat tutup kasir" });
+    }
+  });
+
   // --- Export APIs ---
   function sendXlsx(res: any, data: any[], sheetName: string, filename: string) {
     const wb = XLSX.utils.book_new();

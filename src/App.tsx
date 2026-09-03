@@ -9,6 +9,7 @@ import Settings from "./pages/Settings"; // Added import for Settings
 import Users from "./pages/Users";
 import Customers from "./pages/Customers";
 import Cash from "./pages/Cash";
+import DailyClosing from "./pages/DailyClosing";
 import Login from "./pages/Login";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="/users" element={<Users />} />
         <Route path="/customers" element={<Customers />} />
         <Route path="/cash" element={<Cash />} />
+        <Route path="/closings" element={<DailyClosing />} />
         <Route path="/settings" element={<Settings />} /> {/* Added route for Settings */}
       </Route>
     </Routes>
