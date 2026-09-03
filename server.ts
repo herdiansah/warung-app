@@ -13,6 +13,7 @@ import { CheckoutValidationError, validateCheckoutItems } from "./src/domain/tra
 import { z } from "zod";
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
+import XLSX from "xlsx";
 
 const productSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -801,6 +802,171 @@ async function startServer() {
       });
     } catch (err: any) {
       logger.error("GET /api/reports failed", { month: req.query.month, error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- Export APIs ---
+  function sendXlsx(res: any, data: any[], sheetName: string, filename: string) {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(Buffer.from(buf));
+  }
+
+  app.get("/api/export/products", authenticateToken, authorizeRole(["owner", "manager"]), async (_req: AuthRequest, res) => {
+    try {
+      const products = await prisma.product.findMany({ where: { is_active: true }, orderBy: { name: "asc" } });
+      const rows = products.map(p => ({
+        Nama: p.name,
+        Kategori: p.category || "-",
+        "Harga Beli": Number(p.purchase_price),
+        "Harga Jual": Number(p.selling_price),
+        Stok: p.stock,
+        Satuan: p.unit
+      }));
+      sendXlsx(res, rows, "Produk", `produk-${new Date().toISOString().split("T")[0]}.xlsx`);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/export/stock-history", authenticateToken, authorizeRole(["owner", "manager"]), async (req: AuthRequest, res) => {
+    try {
+      const { from, to } = req.query;
+      const where: any = {};
+      if (from && to) {
+        where.created_at = { gte: new Date(from as string), lte: new Date(`${to}T23:59:59.999Z`) };
+      }
+      const logs = await prisma.stockLog.findMany({ where, include: { product: true }, orderBy: { created_at: "desc" } });
+      const rows = logs.map(l => ({
+        Tanggal: l.created_at.toISOString().split("T")[0],
+        Produk: l.product.name,
+        Tipe: l.change_type,
+        Qty: l.qty,
+        "Stok Sebelum": l.stock_before,
+        "Stok Sesudah": l.stock_after,
+        Aktor: l.actor || "-",
+        Alasan: l.reason || "-"
+      }));
+      sendXlsx(res, rows, "Riwayat Stok", `stok-history-${new Date().toISOString().split("T")[0]}.xlsx`);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/export/sales-daily", authenticateToken, authorizeRole(["owner", "manager"]), async (req: AuthRequest, res) => {
+    try {
+      const { date } = req.query;
+      if (typeof date !== "string" || !/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(date)) {
+        return res.status(400).json({ error: "date must use YYYY-MM-DD format" });
+      }
+      const localDate = new Date(`${date}T00:00:00`);
+      const tzDate = toZonedTime(localDate, TIMEZONE);
+      const sd = startOfDay(tzDate);
+      const ed = endOfDay(tzDate);
+
+      const txs = await prisma.transaction.findMany({
+        where: { transaction_date: { gte: sd, lte: ed }, status: { not: "void" } },
+        include: { items: true },
+        orderBy: { transaction_date: "asc" }
+      });
+
+      const rows = txs.flatMap(tx => tx.items.map(ti => ({
+        "ID Transaksi": tx.id.slice(0, 8),
+        Waktu: tx.transaction_date.toISOString().replace("T", " ").slice(0, 19),
+        Produk: ti.product_name,
+        Qty: ti.qty,
+        Harga: Number(ti.price),
+        "Harga Modal": Number(ti.unit_cost),
+        Subtotal: Number(ti.subtotal),
+        Profit: (Number(ti.price) - Number(ti.unit_cost)) * ti.qty
+      })));
+
+      sendXlsx(res, rows, "Penjualan Harian", `penjualan-${date}.xlsx`);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/export/sales-monthly", authenticateToken, authorizeRole(["owner", "manager"]), async (req: AuthRequest, res) => {
+    try {
+      const { month } = req.query;
+      if (typeof month !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+        return res.status(400).json({ error: "month must use YYYY-MM format" });
+      }
+      const localDate = new Date(`${month}-01T00:00:00`);
+      const tzDate = toZonedTime(localDate, TIMEZONE);
+      const sd = startOfMonth(tzDate);
+      const ed = endOfMonth(tzDate);
+
+      const txs = await prisma.transaction.findMany({
+        where: { transaction_date: { gte: sd, lte: ed }, status: { not: "void" } },
+        include: { items: true },
+        orderBy: { transaction_date: "asc" }
+      });
+
+      const rows = txs.flatMap(tx => tx.items.map(ti => ({
+        Tanggal: tx.transaction_date.toISOString().split("T")[0],
+        "ID Transaksi": tx.id.slice(0, 8),
+        Produk: ti.product_name,
+        Qty: ti.qty,
+        Harga: Number(ti.price),
+        "Harga Modal": Number(ti.unit_cost),
+        Subtotal: Number(ti.subtotal),
+        Profit: (Number(ti.price) - Number(ti.unit_cost)) * ti.qty
+      })));
+
+      sendXlsx(res, rows, "Penjualan Bulanan", `penjualan-${month}.xlsx`);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- Restock/Kulakan API ---
+  app.post("/api/stocks/restock", authenticateToken, authorizeRole(["owner", "manager"]), async (req: AuthRequest, res) => {
+    try {
+      const { product_id, qty, cost_per_unit, supplier, receipt_ref } = req.body;
+
+      if (!product_id || typeof qty !== "number" || qty <= 0) {
+        return res.status(400).json({ error: "product_id and qty (positive number) are required" });
+      }
+
+      await prisma.$transaction(async (txPrisma) => {
+        const product = await txPrisma.product.findUnique({ where: { id: product_id } });
+        if (!product) throw new Error("Product not found");
+
+        const newStock = product.stock + qty;
+
+        // Update stock and optionally purchase price
+        const updateData: any = { stock: newStock };
+        if (typeof cost_per_unit === "number" && cost_per_unit > 0) {
+          updateData.purchase_price = cost_per_unit;
+        }
+
+        await txPrisma.product.update({ where: { id: product_id }, data: updateData });
+
+        await txPrisma.stockLog.create({
+          data: {
+            product_id,
+            change_type: "restock",
+            qty,
+            stock_before: product.stock,
+            stock_after: newStock,
+            actor: req.user?.email || "System",
+            reason: [supplier, receipt_ref].filter(Boolean).join(" | ") || "Restock",
+            reference_id: receipt_ref || null
+          }
+        });
+      });
+
+      logger.success("Product restocked", { product_id, qty, supplier });
+      res.json({ success: true });
+    } catch (err: any) {
+      logger.error("POST /api/stocks/restock failed", { error: err.message });
       res.status(500).json({ error: err.message });
     }
   });
