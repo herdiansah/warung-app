@@ -55,11 +55,13 @@
 - [x] TASK-M3-4: Append-only audit log for sensitive changes
 
 ## M4 — Operational reporting and business workflows
-*Status: Pending*
-- [ ] TASK-M4-1: CSV/XLSX exports
-- [ ] TASK-M4-2: Purchase/restock workflow
-- [ ] TASK-M4-3: Customer receivables ledger & cash movement ledger
-- [ ] TASK-M4-4: Daily closing report
+*Status: Completed*
+- [x] TASK-M4-1: CSV/XLSX exports
+- [x] TASK-M4-2: Purchase/restock workflow (auto cash-out on kulakan)
+- [x] TASK-M4-3: Customer receivables ledger & cash movement ledger
+- [x] TASK-M4-4: Daily closing report (tutup kasir + selisih)
+- [x] TASK-M4-5: Barcode scanner support (barcode field, lookup endpoint, POS scan input)
+- [x] TASK-M4-6: Data import with validation (XLSX/CSV → upsert by barcode/name, row error reporting)
 
 ## M5 — Production hardening and OSS growth
 *Status: Pending*

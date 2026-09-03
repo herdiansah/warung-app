@@ -41,6 +41,7 @@ model Setting {
 model Product {
   id             String            @id @default(uuid())
   name           String
+  barcode        String?           @unique
   category       String?
   purchase_price Decimal
   selling_price  Decimal

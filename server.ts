@@ -17,6 +17,7 @@ import XLSX from "xlsx";
 
 const productSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  barcode: z.string().max(64).nullable().optional(),
   category: z.string().nullable().optional(),
   purchase_price: z.coerce.number().min(0, "Purchase price must be positive"),
   selling_price: z.coerce.number().min(0, "Selling price must be positive"),
@@ -206,6 +207,21 @@ async function startServer() {
   // --- API Routes ---
 
   // Products
+  app.get("/api/products/barcode/:code", authenticateToken, async (req, res) => {
+    try {
+      const code = String(req.params.code || "").trim();
+      if (!code) return res.status(400).json({ error: "Barcode kosong" });
+      const product = await prisma.product.findFirst({
+        where: { barcode: code, is_active: true },
+      });
+      if (!product) return res.status(404).json({ error: "Produk tidak ditemukan" });
+      res.json(product);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Gagal mencari produk" });
+    }
+  });
+
   app.get("/api/products", authenticateToken, async (req, res) => {
     try {
       const products = await prisma.product.findMany({
@@ -219,18 +235,21 @@ async function startServer() {
     }
   });
 
+  // Barcode lookup (returns product by barcode, used by scanner in POS)
+
   app.post("/api/products", authenticateToken, authorizeRole(["owner", "manager"]), async (req, res) => {
     try {
       const parsed = productSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.format() });
       }
-      const { name, category, purchase_price, selling_price, stock, unit } = parsed.data;
+      const { name, barcode, category, purchase_price, selling_price, stock, unit } = parsed.data;
 
       const product = await prisma.$transaction(async (txPrisma) => {
         const newProduct = await txPrisma.product.create({
           data: {
             name,
+            barcode: barcode || null,
             category,
             purchase_price,
             selling_price,
@@ -256,6 +275,9 @@ async function startServer() {
       logger.success("Product created", { id: product.id, name: req.body.name });
       res.json({ id: product.id });
     } catch (err: any) {
+      if (err.code === "P2002" && err.meta?.target?.includes?.("barcode")) {
+        return res.status(400).json({ error: "Barcode sudah digunakan" });
+      }
       logger.error("POST /api/products failed", { error: err.message, body: req.body });
       res.status(500).json({ error: err.message });
     }
@@ -267,7 +289,7 @@ async function startServer() {
       if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.format() });
       }
-      const { name, category, purchase_price, selling_price, stock, unit, is_active } = parsed.data;
+      const { name, barcode, category, purchase_price, selling_price, stock, unit, is_active } = parsed.data;
 
       const productId = req.params.id;
 
@@ -277,7 +299,7 @@ async function startServer() {
 
         await txPrisma.product.update({
           where: { id: productId },
-          data: { name, category, purchase_price, selling_price, stock, unit }
+          data: { name, barcode: barcode || null, category, purchase_price, selling_price, stock, unit }
         });
 
         if (existingProduct.stock !== stock) {
@@ -297,6 +319,9 @@ async function startServer() {
       logger.success("Product updated", { id: productId, name });
       res.json({ success: true });
     } catch (err: any) {
+      if (err.code === "P2002" && err.meta?.target?.includes?.("barcode")) {
+        return res.status(400).json({ error: "Barcode sudah digunakan" });
+      }
       logger.error("PUT /api/products/:id failed", { id: req.params.id, error: err.message });
       res.status(500).json({ error: err.message });
     }
@@ -1390,6 +1415,87 @@ async function startServer() {
       res.json({ success: true });
     } catch (err: any) {
       logger.error("POST /api/stocks/restock failed", { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Data import with validation (products, from parsed XLSX/CSV on the client)
+  app.post("/api/import/products", authenticateToken, authorizeRole(["owner", "manager"]), async (req: AuthRequest, res) => {
+    try {
+      const rows = req.body?.rows;
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return res.status(400).json({ error: "rows (array of products) wajib diisi" });
+      }
+      if (rows.length > 500) {
+        return res.status(400).json({ error: "Maksimal 500 baris per import" });
+      }
+
+      const results = { created: 0, updated: 0, skipped: 0, errors: [] as { row: number; error: string }[] };
+
+      for (let i = 0; i < rows.length; i++) {
+        const rowNum = i + 2; // +2 because row 1 is the header
+        const row = rows[i];
+        // Normalize header keys: allow indonesian/english variants
+        const norm: any = {};
+        for (const [k, v] of Object.entries(row)) {
+          const key = String(k).toLowerCase().trim();
+          const map: Record<string, string> = {
+            "nama": "name", "name": "name", "nama produk": "name", "product": "name",
+            "barcode": "barcode", "kode": "barcode", "kode produk": "barcode",
+            "kategori": "category", "category": "category", "kat": "category",
+            "harga beli": "purchase_price", "harga_beli": "purchase_price", "purchase_price": "purchase_price", "hpp": "purchase_price", "modal": "purchase_price",
+            "harga jual": "selling_price", "harga_jual": "selling_price", "selling_price": "selling_price", "harga": "selling_price", "price": "selling_price",
+            "stok": "stock", "stock": "stock", "qty": "stock", "jumlah": "stock",
+            "satuan": "unit", "unit": "unit", "uom": "unit"
+          };
+          const mapped = map[key];
+          if (mapped) norm[mapped] = v;
+        }
+
+        // Coerce numbers from strings (Excel cells can be strings)
+        const coerced = {
+          ...norm,
+          purchase_price: norm.purchase_price !== undefined ? Number(String(norm.purchase_price).replace(/[^\d.-]/g, "")) : undefined,
+          selling_price: norm.selling_price !== undefined ? Number(String(norm.selling_price).replace(/[^\d.-]/g, "")) : undefined,
+          stock: norm.stock !== undefined ? Number(String(norm.stock).replace(/[^\d.-]/g, "")) : undefined,
+        };
+
+        const parsed = productSchema.safeParse(coerced);
+        if (!parsed.success) {
+          results.skipped++;
+          results.errors.push({ row: rowNum, error: parsed.error.issues.map(i => i.message).join("; ") });
+          continue;
+        }
+        const { name, barcode, category, purchase_price, selling_price, stock, unit } = parsed.data;
+
+        try {
+          // Upsert by barcode if provided, else by name
+          const existing = barcode
+            ? await prisma.product.findUnique({ where: { barcode } })
+            : await prisma.product.findFirst({ where: { name } });
+
+          if (existing) {
+            await prisma.product.update({
+              where: { id: existing.id },
+              data: { name, barcode: barcode || null, category, purchase_price, selling_price, stock, unit }
+            });
+            results.updated++;
+          } else {
+            await prisma.product.create({
+              data: { name, barcode: barcode || null, category, purchase_price, selling_price, stock, unit }
+            });
+            results.created++;
+          }
+        } catch (err: any) {
+          results.skipped++;
+          results.errors.push({ row: rowNum, error: err.message });
+        }
+      }
+
+      logger.success("Products imported", { ...results });
+      res.json(results);
+    } catch (err: any) {
+      logger.error("POST /api/import/products failed", { error: err.message });
       res.status(500).json({ error: err.message });
     }
   });
