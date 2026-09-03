@@ -6,6 +6,7 @@ import POS from "./pages/POS";
 import History from "./pages/History";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings"; // Added import for Settings
+import Users from "./pages/Users";
 import Login from "./pages/Login";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/pos" element={<POS />} />
         <Route path="/history" element={<History />} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/users" element={<Users />} />
         <Route path="/settings" element={<Settings />} /> {/* Added route for Settings */}
       </Route>
     </Routes>
