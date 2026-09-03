@@ -197,6 +197,14 @@ Produk ditampilkan sebagai:
 * card
 * search cepat
 
+### 3. Barcode yang Tidak Menghambat Kasir
+
+* Input barcode tetap menerima scanner hardware/manual.
+* Tombol kamera di POS harus cukup besar untuk disentuh, meminta izin browser secara jelas, dan memilih kamera belakang di mobile bila tersedia.
+* Modal scan menampilkan status berhasil/gagal dan fallback input manual agar transaksi tidak berhenti saat kamera tidak tersedia.
+* Form produk menempatkan tombol **Generate** di samping field barcode dan memperlihatkan preview label.
+* Tombol cetak label membuka dialog browser; label mencantumkan nama produk, barcode, dan harga jual.
+
 ---
 
 ### 3. Clear Feedback

@@ -7,8 +7,8 @@ Baca versi bahasa Inggris di [README.md](README.md).
 ## Fitur saat ini
 
 - Dashboard penjualan harian, jumlah transaksi, produk terlaris, dan peringatan stok menipis.
-- Manajemen produk dengan harga, stok, kategori, pencarian, penghapusan lunak untuk produk yang sudah terjual, dan impor massal dari XLSX/CSV.
-- Kasir (POS) dengan validasi harga dan stok di sisi server, plus dukungan barcode scanner.
+- Manajemen produk dengan harga, stok, kategori, pencarian, penghapusan lunak untuk produk yang sudah terjual, impor massal dari XLSX/CSV, serta pembuatan barcode Code 128 internal dan cetak label.
+- Kasir (POS) dengan validasi harga dan stok di sisi server, scanner input manual, serta scan kamera (kamera belakang di mobile, webcam di desktop).
 - Offline-first PWA: transaksi checkout antre di IndexedDB dan disinkronkan dengan idempotency key saat koneksi kembali.
 - Penyesuaian stok dan riwayat pergerakan stok yang dapat diaudit.
 - Laporan penjualan bulanan dengan pendapatan, total transaksi, laba kotor, dan produk terlaris.

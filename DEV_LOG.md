@@ -161,3 +161,14 @@
 - **Problem:** Docker daemon unavailable (dockerd binary missing) → image build unverifiable locally.
 - **Solution:** verified the exact production entrypoint (`npm start`/tsx) natively instead; Dockerfile steps (npm ci, prisma generate, vite build) already proven on this machine.
 **Follow-ups:** Tag v1.0.0 pushed. GitHub release notes dapat dibuat dari CHANGELOG entry v1.0.0. Restore ci.yml dari git history kapan pun workflow mau diaktifkan lagi.
+
+## [2026-09-03] POST-M5: Camera Barcode Scan & Product Barcode Labels
+**Role:** LD / FE / QA
+**Modules/Functions:** POS camera scan, product barcode generation, Code 128 preview, browser label printing
+**Files Touched:**
+- `src/components/CameraScanner.tsx`, `src/components/BarcodeLabel.tsx`
+- `src/pages/POS.tsx`, `src/pages/Products.tsx`
+- `server.ts`, `package.json`, `tests/api/products.test.ts`
+**Tests/Validation:** API suite 46/46 pass; barcode UI E2E pass (generate, SVG preview, print modal, label quantity); M4 smoke E2E 8/8 pass; lint and production build pass; PM2 health endpoint returned 200.
+**Problems/Solutions:** ZXing scan lifecycle uses returned `IScannerControls.stop()` rather than an unavailable reader reset method. Headless E2E has no camera, so its manual fallback exercises the same authenticated barcode lookup and cart-add path.
+**Follow-ups:** Physical device testing remains needed for real camera focus/decoding and printer-specific label dimensions; browser Print / Save as PDF is the supported output path.

@@ -99,7 +99,7 @@ Deliverables:
 - [x] Customer ledger for receivables (utang/piutang), payments, and balances.
 - [x] Cash movement ledger for opening cash, expenses, deposits, and closing reconciliation.
 - [x] Daily closing report: expected cash, recorded cash, variance, and approval.
-- [x] Barcode scanner support and printable receipt layout.
+- [x] Barcode workflow: scanner input, camera scan (mobile/webcam), internal Code 128 generation, and browser-printable product labels.
 - [x] Data import with validation, dry-run preview, and error report.
 
 Acceptance criteria:

@@ -121,6 +121,7 @@ Database Server
 | -------------- | -------- |
 | id             | uuid     |
 | name           | varchar  |
+| barcode        | varchar(64), unique, nullable |
 | category       | varchar  |
 | purchase_price | decimal  |
 | selling_price  | decimal  |
@@ -248,6 +249,34 @@ Response:
   }
 ]
 ```
+
+---
+
+## Generate Internal Barcode
+
+```
+POST /api/products/barcode/generate
+```
+
+Authorization: owner or manager JWT required.
+
+Response:
+
+```json
+{ "barcode": "W123456789012" }
+```
+
+The server uses cryptographic randomness, checks the `products.barcode` unique index, and retries a bounded number of times. The client renders the returned value as Code 128; the response alone does not create or modify a product.
+
+---
+
+## Barcode Lookup for POS
+
+```
+GET /api/products/barcode/{code}
+```
+
+Authenticated lookup returns an active product or `404`. POS uses this same endpoint for manual scanner input and camera/webcam decoding.
 
 ---
 

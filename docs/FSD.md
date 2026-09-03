@@ -72,6 +72,7 @@ Mengelola daftar produk yang dijual di warung.
 | -------------- | ---------- | --------- |
 | product_id     | UUID / INT | Yes       |
 | name           | varchar    | Yes       |
+| barcode        | varchar(64), unique | No |
 | category       | varchar    | No        |
 | purchase_price | decimal    | Yes       |
 | selling_price  | decimal    | Yes       |
@@ -98,6 +99,14 @@ Output:
 
 * produk tersimpan
 * muncul di daftar produk
+
+#### Barcode dan Label Produk
+
+* Owner atau manager dapat membuat barcode internal unik berformat `W` + 12 digit; nilainya dirender sebagai Code 128.
+* Barcode manual/vendor tetap dapat diinput dan tidak diubah otomatis.
+* Form produk menampilkan preview barcode sebelum disimpan.
+* Produk yang memiliki barcode dapat mencetak 1–100 label melalui dialog print browser; pengguna dapat memilih printer label atau **Save as PDF**.
+* Saat transaksi POS, produk dapat ditemukan melalui input scanner, kamera belakang perangkat mobile, atau webcam desktop. Barcode yang berhasil ditemukan langsung menambah produk ke keranjang; kode yang tidak terdaftar diberi feedback tanpa mengubah keranjang.
 
 ---
 

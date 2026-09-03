@@ -263,7 +263,6 @@ Target: **transaksi bisa dicatat < 5 detik**
 
 # 10. Future Features (Phase 2)
 
-* Scan barcode
 * Cetak struk
 * Multi user (kasir)
 * Sync cloud

@@ -7,8 +7,8 @@ Read this in [Bahasa Indonesia](README.id.md).
 ## Current features
 
 - Dashboard for daily sales, transaction count, best-selling products, and low-stock alerts.
-- Product management with pricing, stock, categories, search, soft deletion for sold products, and bulk import from XLSX/CSV.
-- Point-of-sale (POS) checkout with server-side pricing and stock validation, plus barcode scanner input.
+- Product management with pricing, stock, categories, search, soft deletion for sold products, bulk import from XLSX/CSV, and internal Code 128 barcode generation/label printing.
+- Point-of-sale (POS) checkout with server-side pricing and stock validation, manual scanner input, and camera scanning (rear camera on mobile, webcam on desktop).
 - Offline-first PWA: checkout intents are queued in IndexedDB and synced with idempotency keys when the connection returns.
 - Stock adjustments and an auditable stock-movement history.
 - Monthly sales reports with revenue, transaction totals, gross profit, and best-selling products.

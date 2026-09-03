@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- Product barcode generation for internal Code 128 labels (`W` + 12 digits), restricted to owner and manager roles.
+- SVG barcode preview in the product form and browser-native label printing (1–100 copies; printer or Save as PDF).
+- POS camera barcode scanner using the mobile rear camera when available and a desktop webcam fallback; supports EAN, UPC, Code 128/39, ITF, and QR.
+
 ## [1.0.0] — 2026-09-03
 
 ### Added
