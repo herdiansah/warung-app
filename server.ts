@@ -243,8 +243,20 @@ async function startServer() {
   app.post("/api/transactions", authenticateToken, async (req: AuthRequest, res) => {
     try {
       const items = validateCheckoutItems(req.body?.items);
+      const idempotency_key = req.body?.idempotency_key;
       const userId = req.user?.id;
       if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+      if (idempotency_key) {
+        const existingTx = await prisma.transaction.findUnique({
+          where: { idempotency_key },
+          include: { items: true }
+        });
+        if (existingTx) {
+          // If already processed, just return success
+          return res.status(200).json(existingTx);
+        }
+      }
 
       const tx = await prisma.$transaction(async (txPrisma) => {
         // Prepare items with names and calculate server-side totals
@@ -303,6 +315,7 @@ async function startServer() {
 
         const newTx = await txPrisma.transaction.create({
           data: {
+            idempotency_key,
             total_amount: calculatedTotal,
             created_by: userId,
             items: {

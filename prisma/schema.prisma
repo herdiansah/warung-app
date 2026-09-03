@@ -43,6 +43,7 @@ model Transaction {
   transaction_date DateTime          @default(now())
   total_amount     Decimal
   created_by       String
+  idempotency_key  String?           @unique
   user             User              @relation(fields: [created_by], references: [id])
   created_at       DateTime          @default(now())
   items            TransactionItem[]

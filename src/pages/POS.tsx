@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle2 } from "lucide-react";
 import { useToast } from "../components/Toast";
+import { addCheckoutToOutbox } from "../utils/offlineQueue";
 
 export default function POS() {
   const { showToast } = useToast();
@@ -94,6 +95,13 @@ export default function POS() {
     setIsSubmitting(true);
     setCheckoutError(null);
 
+    const idempotency_key = crypto.randomUUID();
+    const payload = {
+      idempotency_key,
+      items: cart.map(item => ({ product_id: item.product_id, qty: item.qty })),
+      total_amount: totalAmount
+    };
+
     try {
       const token = localStorage.getItem("warung_token");
       const res = await fetch("/api/transactions", {
@@ -102,9 +110,7 @@ export default function POS() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({
-          items: cart.map(item => ({ product_id: item.product_id, qty: item.qty })),
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
@@ -115,16 +121,30 @@ export default function POS() {
         setTimeout(() => setIsSuccess(false), 3000);
       } else {
         const data = await res.json();
-        const errMsg = data.error || "Gagal menyimpan transaksi";
+        const errMsg = data.error?.format ? "Error validasi data" : (data.error || "Gagal menyimpan transaksi");
         setCheckoutError(errMsg);
         setRetryCount(prev => prev + 1);
         showToast(errMsg, "error");
       }
-    } catch (err) {
-      const errMsg = "Terjadi kesalahan jaringan";
-      setCheckoutError(errMsg);
-      setRetryCount(prev => prev + 1);
-      showToast(errMsg, "error");
+    } catch (err: any) {
+      if (err.name === 'TypeError' || err.message === 'Failed to fetch') {
+        // Network error - save to offline queue
+        await addCheckoutToOutbox(payload);
+        const errMsg = "Koneksi terputus. Transaksi disimpan offline (pending).";
+        setCheckoutError(errMsg);
+        showToast(errMsg, "info");
+        setIsSuccess(true);
+        setCart([]);
+        setTimeout(() => {
+          setIsSuccess(false);
+          setCheckoutError(null);
+        }, 5000);
+      } else {
+        const errMsg = "Terjadi kesalahan jaringan";
+        setCheckoutError(errMsg);
+        setRetryCount(prev => prev + 1);
+        showToast(errMsg, "error");
+      }
     } finally {
       setIsSubmitting(false);
     }

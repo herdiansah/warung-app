@@ -1,5 +1,6 @@
 import { Link, useLocation, Outlet } from "react-router-dom";
 import { Home, Package, ShoppingCart, History, BarChart3, LogOut, Settings as SettingsIcon } from "lucide-react";
+import { SyncManager } from "./SyncManager";
 
 export function Layout() {
   const location = useLocation();
@@ -110,6 +111,9 @@ export function Layout() {
 
       {/* Main Content */}
       <main className="flex-1 p-4 md:p-8 max-w-6xl mx-auto w-full">
+        <div className="flex justify-end mb-4">
+          <SyncManager />
+        </div>
         <Outlet />
       </main>
     </div>
