@@ -1,18 +1,21 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { TrendingUp, ShoppingBag, AlertCircle, Plus, RefreshCw, BarChart } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart as RechartsBarChart, Bar } from 'recharts';
+import { TrendingUp, ShoppingBag, AlertCircle, Plus, RefreshCw, BarChart, Calendar } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function Dashboard() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  
+  // Date range filter states: 7, 30, or 90 days
+  const [chartDays, setChartDays] = useState<number>(7);
 
   const fetchDashboard = () => {
     setLoading(true);
     setError(false);
     const token = localStorage.getItem("warung_token");
-    fetch("/api/dashboard", {
+    fetch(`/api/dashboard?days=${chartDays}`, {
       headers: { "Authorization": `Bearer ${token}` }
     })
       .then((res) => {
@@ -31,7 +34,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboard();
-  }, []);
+  }, [chartDays]);
 
   if (loading) {
     return (
@@ -108,10 +111,27 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 h-80">
-        <div className="flex items-center gap-2 mb-6">
-          <BarChart className="w-5 h-5 text-emerald-600" />
-          <h2 className="text-lg font-bold text-gray-900">Penjualan 7 Hari Terakhir</h2>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 h-[26rem]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-2">
+            <BarChart className="w-5 h-5 text-emerald-600" />
+            <h2 className="text-lg font-bold text-gray-900">Grafik Penjualan</h2>
+          </div>
+          <div className="flex bg-gray-100 p-1 rounded-xl w-max">
+            {[7, 30, 90].map((d) => (
+              <button
+                key={d}
+                onClick={() => setChartDays(d)}
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                  chartDays === d 
+                    ? "bg-white text-emerald-600 shadow-sm" 
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {d} Hari
+              </button>
+            ))}
+          </div>
         </div>
         {!data.chart_data || data.chart_data.length === 0 ? (
           <div className="text-center py-10 text-gray-400">
@@ -119,7 +139,7 @@ export default function Dashboard() {
             <p className="text-sm">Belum ada data penjualan</p>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="80%">
             <AreaChart data={data.chart_data} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
@@ -128,11 +148,18 @@ export default function Dashboard() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} dy={10} />
+              <XAxis 
+                dataKey="date" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 11, fill: '#9ca3af' }} 
+                dy={10} 
+                minTickGap={20}
+              />
               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} tickFormatter={(val) => `Rp ${(val/1000)}k`} />
               <Tooltip 
                 formatter={(value: number) => [`Rp ${value.toLocaleString("id-ID")}`, "Penjualan"]}
-                labelStyle={{ color: '#374151', fontWeight: 600 }}
+                labelStyle={{ color: '#374151', fontWeight: 600, marginBottom: '4px' }}
                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
               />
               <Area type="monotone" dataKey="total" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />

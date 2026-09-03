@@ -642,23 +642,24 @@ async function startServer() {
         LIMIT 5
       `;
 
-      // Sales data for chart (Last 7 days)
-      const sevenDaysAgoLocal = new Date();
-      sevenDaysAgoLocal.setDate(sevenDaysAgoLocal.getDate() - 6);
-      const sevenDaysAgoTz = toZonedTime(sevenDaysAgoLocal, TIMEZONE);
-      const sevenDaysAgoStart = startOfDay(sevenDaysAgoTz);
+      // Sales data for chart
+      const days = parseInt(req.query.days as string) || 7;
+      const historyStartLocal = new Date();
+      historyStartLocal.setDate(historyStartLocal.getDate() - (days - 1));
+      const historyStartTz = toZonedTime(historyStartLocal, TIMEZONE);
+      const historyStartStart = startOfDay(historyStartTz);
 
       const salesDataRaw: any[] = await prisma.$queryRaw`
         SELECT DATE(CONVERT_TZ(transaction_date, '+00:00', '+07:00')) as date, SUM(total_amount) as total
         FROM Transaction 
-        WHERE transaction_date >= ${sevenDaysAgoStart} AND status != 'void'
+        WHERE transaction_date >= ${historyStartStart} AND status != 'void'
         GROUP BY DATE(CONVERT_TZ(transaction_date, '+00:00', '+07:00'))
         ORDER BY date ASC
       `;
 
       const chart_data = [];
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(sevenDaysAgoLocal);
+      for (let i = 0; i < days; i++) {
+        const d = new Date(historyStartLocal);
         d.setDate(d.getDate() + i);
         const dateStr = d.toISOString().split('T')[0];
         
@@ -667,8 +668,13 @@ async function startServer() {
           return rDateStr === dateStr;
         });
 
+        // Use short date formatting if looking at larger datasets, or just weekday if 7 days
+        const labelFormat = days > 14 
+          ? d.toLocaleDateString("id-ID", { day: 'numeric', month: 'short' })
+          : d.toLocaleDateString("id-ID", { weekday: 'short' });
+
         chart_data.push({
-          date: d.toLocaleDateString("id-ID", { weekday: 'short' }),
+          date: labelFormat,
           total: found ? Number(found.total) : 0
         });
       }
