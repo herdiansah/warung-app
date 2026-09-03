@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Edit, Trash2, Search, X, Minus, Package, History, AlertTriangle, PackagePlus, Upload, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash2, Search, X, Minus, Package, History, AlertTriangle, PackagePlus, Upload, Loader2, Barcode, Printer } from "lucide-react";
 import { StockHistoryTab } from "../components/StockHistoryTab";
 import { useToast } from "../components/Toast";
+import BarcodeLabel from "../components/BarcodeLabel";
 
 export default function Products() {
   const { showToast } = useToast();
@@ -28,6 +29,9 @@ export default function Products() {
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importResult, setImportResult] = useState<{ created: number; updated: number; skipped: number; errors: { row: number; error: string }[] } | null>(null);
+  const [printTarget, setPrintTarget] = useState<any>(null);
+  const [labelCount, setLabelCount] = useState(1);
+  const [generatingBarcode, setGeneratingBarcode] = useState(false);
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -122,6 +126,38 @@ export default function Products() {
   const marginPercent = purchasePrice > 0 ? ((sellingPrice - purchasePrice) / purchasePrice) * 100 : 0;
   const profitPerUnit = sellingPrice - purchasePrice;
   const isMarginLow = purchasePrice > 0 && sellingPrice > 0 && marginPercent < minMarginPercent;
+
+  const generateBarcode = async () => {
+    if (generatingBarcode) return;
+    setGeneratingBarcode(true);
+    try {
+      const token = localStorage.getItem("warung_token");
+      const res = await fetch("/api/products/barcode/generate", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal membuat barcode");
+      setFormData((current) => ({ ...current, barcode: data.barcode }));
+    } catch (err: any) {
+      showToast(err.message || "Gagal membuat barcode", "error");
+    } finally {
+      setGeneratingBarcode(false);
+    }
+  };
+
+  const printLabels = () => {
+    const preview = document.getElementById("barcode-print-preview");
+    if (!preview || !printTarget) return;
+    const win = window.open("", "_blank", "noopener,noreferrer");
+    if (!win) return showToast("Popup diblokir browser. Izinkan popup lalu coba lagi.", "error");
+    win.document.write(`<!doctype html><html><head><title>Label ${printTarget.name}</title><style>
+      @page { margin: 6mm; } body { font-family: Arial, sans-serif; } .labels { display:grid; grid-template-columns:repeat(3, 58mm); gap:3mm; }
+      .labels > div { border:1px dashed #ccc; padding:2mm; min-height:30mm; display:flex; align-items:center; justify-content:center; }
+      svg { max-width:100%; height:auto; } p { margin:1mm 0; }
+    </style></head><body><div class="labels">${Array.from({ length: Math.min(100, Math.max(1, labelCount)) }, () => `<div>${preview.innerHTML}</div>`).join("")}</div><script>window.onload=()=>window.print()</script></body></html>`);
+    win.document.close();
+  };
 
   const handleOpenModal = (product: any = null) => {
     if (product) {
@@ -362,6 +398,17 @@ export default function Products() {
                     >
                       <Edit className="w-4 h-4" /> Edit
                     </button>
+                    {product.barcode && (
+                      <button
+                        type="button"
+                        data-testid={`product-print-barcode-${product.id}`}
+                        onClick={() => { setPrintTarget(product); setLabelCount(1); }}
+                        title="Cetak label barcode"
+                        className="flex items-center justify-center py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition-colors"
+                      >
+                        <Printer className="w-4 h-4" />
+                      </button>
+                    )}
                     <button
                       onClick={() => setDeleteTarget(product)}
                       className="flex items-center justify-center gap-1 py-2 px-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium transition-colors text-sm"
@@ -428,7 +475,7 @@ export default function Products() {
               <h2 className="text-xl font-bold text-gray-900">
                 {editingProduct ? "Edit Produk" : "Tambah Produk Baru"}
               </h2>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
+              <button type="button" aria-label="Tutup form produk" onClick={() => setIsModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -459,14 +506,30 @@ export default function Products() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Barcode (Opsional)</label>
-                <input
-                  data-testid="product-barcode"
-                  type="text"
-                  value={formData.barcode}
-                  onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-                  className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  placeholder="Scan atau ketik kode barcode"
-                />
+                <div className="flex gap-2">
+                  <input
+                    data-testid="product-barcode"
+                    type="text"
+                    value={formData.barcode}
+                    onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                    className="min-w-0 flex-1 p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    placeholder="Scan atau ketik kode barcode"
+                  />
+                  <button
+                    type="button"
+                    data-testid="product-generate-barcode"
+                    onClick={generateBarcode}
+                    disabled={generatingBarcode}
+                    className="shrink-0 px-3 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {generatingBarcode ? "..." : "Generate"}
+                  </button>
+                </div>
+                {formData.barcode && (
+                  <div className="mt-3 p-2 border border-gray-100 rounded-xl">
+                    <BarcodeLabel barcode={formData.barcode} name={formData.name || "Produk"} price={sellingPrice || undefined} compact />
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -562,6 +625,24 @@ export default function Products() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {printTarget && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="font-bold text-lg text-gray-900">Cetak Label Barcode</h2>
+              <button type="button" onClick={() => setPrintTarget(null)} className="p-2 text-gray-400 hover:text-gray-600" aria-label="Tutup"><X className="w-5 h-5" /></button>
+            </div>
+            <div id="barcode-print-preview" className="border rounded-xl p-3">
+              <BarcodeLabel barcode={printTarget.barcode} name={printTarget.name} price={Number(printTarget.selling_price)} />
+            </div>
+            <label className="block text-sm font-medium text-gray-700">Jumlah label
+              <input data-testid="barcode-label-count" type="number" min="1" max="100" value={labelCount} onChange={(e) => setLabelCount(Math.min(100, Math.max(1, Number(e.target.value) || 1)))} className="mt-1 w-full p-3 rounded-xl border border-gray-200" />
+            </label>
+            <button data-testid="barcode-print" type="button" onClick={printLabels} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center justify-center gap-2"><Printer className="w-5 h-5" /> Cetak / Simpan PDF</button>
           </div>
         </div>
       )}

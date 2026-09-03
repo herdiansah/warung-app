@@ -13,6 +13,7 @@ import { z } from "zod";
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import XLSX from "xlsx";
+import { randomInt } from "crypto";
 
 const productSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -222,6 +223,21 @@ async function startServer() {
   // --- API Routes ---
 
   // Products
+  // Internal Code 128 values: W + 12 digits. The unique DB constraint remains the final guard.
+  app.post("/api/products/barcode/generate", authenticateToken, authorizeRole(["owner", "manager"]), async (_req, res) => {
+    try {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const barcode = `W${randomInt(0, 1_000_000_000_000).toString().padStart(12, "0")}`;
+        const exists = await prisma.product.findUnique({ where: { barcode }, select: { id: true } });
+        if (!exists) return res.json({ barcode });
+      }
+      res.status(503).json({ error: "Gagal membuat barcode unik, coba lagi" });
+    } catch (err: any) {
+      logger.error("POST /api/products/barcode/generate failed", { error: err.message });
+      res.status(500).json({ error: "Gagal membuat barcode" });
+    }
+  });
+
   app.get("/api/products/barcode/:code", authenticateToken, async (req, res) => {
     try {
       const code = String(req.params.code || "").trim();

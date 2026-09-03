@@ -16,6 +16,7 @@
   "dependencies": {
     "@prisma/client": "^6.19.2",
     "@tailwindcss/vite": "^4.1.14",
+    "@types/jsbarcode": "^3.11.4",
     "@vitejs/plugin-react": "^5.0.4",
     "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
@@ -26,6 +27,7 @@
     "date-fns-tz": "^3.2.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "jsbarcode": "^3.12.3",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
