@@ -6,7 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { authenticateToken, AuthRequest } from "./src/middlewares/authMiddleware";
+import { authenticateToken, authorizeRole, AuthRequest } from "./src/middlewares/authMiddleware";
 import { requestLogger, globalErrorHandler } from "./src/middlewares/errorHandler";
 import { logger } from "./src/utils/logger";
 import { CheckoutValidationError, validateCheckoutItems } from "./src/domain/transaction";
@@ -63,20 +63,107 @@ async function startServer() {
       }
 
       const token = jwt.sign(
-        { id: user.id, name: user.name, email: user.email },
+        { id: user.id, name: user.name, email: user.email, role: user.role, store_id: user.store_id },
         process.env.JWT_SECRET,
         { expiresIn: "7d" }
       );
 
       logger.success("User logged in", { email: user.email });
-      res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+      res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, store_id: user.store_id } });
     } catch (err: any) {
       logger.error("Login failed", { error: err.message });
       res.status(500).json({ error: err.message });
     }
   });
 
-  // --- Helper: Get Setting (key-value) ---
+  app.get("/api/users", authenticateToken, authorizeRole(["owner", "manager"]), async (req: AuthRequest, res) => {
+    try {
+      const users = await prisma.user.findMany({
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          store_id: true,
+          created_at: true
+        }
+      });
+      res.json(users);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/users", authenticateToken, authorizeRole(["owner", "manager"]), async (req: AuthRequest, res) => {
+    try {
+      const { name, email, password, role } = req.body;
+
+      if (!name || !email || !password || !role) {
+        return res.status(400).json({ error: "Name, email, password, and role are required" });
+      }
+
+      if (password.length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters" });
+      }
+
+      if (role === "owner" && req.user?.role !== "owner") {
+        return res.status(403).json({ error: "Only owners can create another owner" });
+      }
+
+      const existingUser = await prisma.user.findUnique({ where: { email } });
+      if (existingUser) {
+        return res.status(400).json({ error: "Email already exists" });
+      }
+
+      const password_hash = await bcrypt.hash(password, 12);
+      
+      const newUser = await prisma.user.create({
+        data: {
+          name,
+          email,
+          password_hash,
+          role,
+          store_id: req.user?.store_id
+        },
+        select: { id: true, name: true, email: true, role: true }
+      });
+
+      res.status(201).json(newUser);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/users/:id/role", authenticateToken, authorizeRole(["owner", "manager"]), async (req: AuthRequest, res) => {
+    try {
+      const { role } = req.body;
+      const targetUserId = req.params.id;
+
+      if (!["owner", "manager", "cashier"].includes(role)) {
+        return res.status(400).json({ error: "Invalid role" });
+      }
+
+      if (role === "owner" && req.user?.role !== "owner") {
+        return res.status(403).json({ error: "Only owners can promote someone to owner" });
+      }
+
+      const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+      if (!targetUser) return res.status(404).json({ error: "User not found" });
+
+      if (targetUser.role === "owner" && req.user?.role !== "owner") {
+         return res.status(403).json({ error: "Managers cannot demote an owner" });
+      }
+
+      await prisma.user.update({
+        where: { id: targetUserId },
+        data: { role }
+      });
+
+      res.json({ message: "Role updated successfully" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
   async function getSetting(key: string, defaultValue: string): Promise<string> {
     const row = await prisma.setting.findUnique({ where: { key } });
     return row?.value ?? defaultValue;
@@ -131,7 +218,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/products", authenticateToken, async (req, res) => {
+  app.post("/api/products", authenticateToken, authorizeRole(["owner", "manager"]), async (req, res) => {
     try {
       const parsed = productSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -173,7 +260,7 @@ async function startServer() {
     }
   });
 
-  app.put("/api/products/:id", authenticateToken, async (req, res) => {
+  app.put("/api/products/:id", authenticateToken, authorizeRole(["owner", "manager"]), async (req, res) => {
     try {
       const parsed = productSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -197,9 +284,11 @@ async function startServer() {
             data: {
               product_id: productId,
               change_type: "update_product",
-              qty: Math.abs(stock - existingProduct.stock),
+              qty: stock - existingProduct.stock,
               stock_before: existingProduct.stock,
-              stock_after: stock
+              stock_after: stock,
+              actor: (req as any).user?.email || "System",
+              reason: "Product Edit"
             }
           });
         }
@@ -212,7 +301,7 @@ async function startServer() {
     }
   });
 
-  app.delete("/api/products/:id", authenticateToken, async (req, res) => {
+  app.delete("/api/products/:id", authenticateToken, authorizeRole(["owner", "manager"]), async (req, res) => {
     try {
       // Check if product is used in transactions
       const count = await prisma.transactionItem.count({
@@ -379,9 +468,14 @@ async function startServer() {
     }
   });
 
-  app.delete("/api/transactions/:id", authenticateToken, async (req, res) => {
+  app.post("/api/transactions/:id/void", authenticateToken, authorizeRole(["owner", "manager"]), async (req: AuthRequest, res) => {
     try {
       const txId = req.params.id;
+      const { void_reason } = req.body;
+
+      if (!void_reason) {
+        return res.status(400).json({ error: "Void reason is required" });
+      }
 
       await prisma.$transaction(async (txPrisma) => {
         const tx = await txPrisma.transaction.findUnique({
@@ -390,37 +484,46 @@ async function startServer() {
         });
 
         if (!tx) throw new Error("Transaction not found");
+        if (tx.status === "void") throw new Error("Transaction is already voided");
 
         // Restore stock
         for (const item of tx.items) {
-          const product = await txPrisma.product.findUnique({ where: { id: item.product_id } });
-          if (product) {
-            const newStock = product.stock + item.qty;
-            await txPrisma.product.update({
-              where: { id: item.product_id },
-              data: { stock: newStock }
-            });
+          await txPrisma.product.update({
+            where: { id: item.product_id },
+            data: { stock: { increment: item.qty } }
+          });
 
-            await txPrisma.stockLog.create({
-              data: {
-                product_id: product.id,
-                change_type: "delete_sale_restore",
-                qty: item.qty,
-                stock_before: product.stock,
-                stock_after: newStock
-              }
-            });
-          }
+          const currentProd = await txPrisma.product.findUnique({ where: { id: item.product_id } });
+          
+          await txPrisma.stockLog.create({
+            data: {
+              product_id: item.product_id,
+              change_type: "void_reversal",
+              qty: item.qty,
+              stock_before: (currentProd?.stock || item.qty) - item.qty,
+              stock_after: currentProd?.stock || 0,
+              actor: req.user?.email || "System",
+              reason: `Void TX: ${txId}`,
+              reference_id: txId
+            }
+          });
         }
 
-        await txPrisma.transactionItem.deleteMany({ where: { transaction_id: txId } });
-        await txPrisma.transaction.delete({ where: { id: txId } });
+        // Mark as void
+        await txPrisma.transaction.update({
+          where: { id: txId },
+          data: {
+            status: "void",
+            void_reason,
+            voided_by: req.user?.id
+          }
+        });
       });
 
-      logger.success("Transaction deleted & stock restored", { id: txId });
-      res.json({ success: true });
+      logger.info("Transaction voided", { txId, by: req.user?.email });
+      res.json({ message: "Transaction voided successfully" });
     } catch (err: any) {
-      logger.error("DELETE /api/transactions/:id failed", { id: req.params.id, error: err.message });
+      logger.error("POST /api/transactions/:id/void failed", { error: err.message });
       res.status(500).json({ error: err.message });
     }
   });
@@ -462,9 +565,11 @@ async function startServer() {
           data: {
             product_id,
             change_type: reason || "manual",
-            qty: Math.abs(diff),
+            qty: diff, // Store raw diff to indicate direction
             stock_before: product.stock,
-            stock_after: newStock
+            stock_after: newStock,
+            actor: req.user?.email || "System",
+            reason: reason || "Stock Adjustment"
           }
         });
       });

@@ -80,3 +80,19 @@
 - **Problem:** Prisma interactive migration failed in headless mode when adding unique `idempotency_key`.
 - **Solution:** Piped `yes ''` to bypass the warning.
 **Follow-ups:** None.
+
+## [2026-09-03] TASK-M3: Store accounts, roles, and auditability
+**Role:** LD/FE
+**Modules/Functions:** RBAC, User Management, Transaction Voids, Store ownership
+**Files Touched:**
+- `prisma/schema.prisma`
+- `src/middlewares/authMiddleware.ts`
+- `server.ts`
+- `src/pages/Users.tsx`, `src/App.tsx`, `src/components/Layout.tsx`
+**Tests/Validation:** 
+- TypeScript (`tsc --noEmit`) and Vite build passed.
+- Prisma migration `20260903003006_add_store_and_roles` successfully applied to TiDB.
+**Problems/Solutions:**
+- **Problem:** Hard deleting transactions corrupts historical integrity and audit trail.
+- **Solution:** Replaced `DELETE /api/transactions/:id` with `POST /api/transactions/:id/void`. It restores stock, leaves a `void_reversal` log in StockLog, and marks the transaction as `void` with a `void_reason` and `voided_by` reference.
+**Follow-ups:** None.

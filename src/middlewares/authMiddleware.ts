@@ -6,6 +6,7 @@ export interface AuthRequest extends Request {
         id: string;
         name: string;
         email: string;
+        role: string;
     };
 }
 
@@ -29,4 +30,16 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     } catch (error) {
         res.status(403).json({ error: "Invalid token." });
     }
+};
+
+export const authorizeRole = (allowedRoles: string[]) => {
+    return (req: AuthRequest, res: Response, next: NextFunction) => {
+        if (!req.user || !req.user.role) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+        if (!allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({ error: "Forbidden: insufficient permissions" });
+        }
+        next();
+    };
 };

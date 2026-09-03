@@ -1,5 +1,5 @@
 import { Link, useLocation, Outlet } from "react-router-dom";
-import { Home, Package, ShoppingCart, History, BarChart3, LogOut, Settings as SettingsIcon } from "lucide-react";
+import { Home, Package, ShoppingCart, History, BarChart3, LogOut, Settings as SettingsIcon, Users as UserIcon } from "lucide-react";
 import { SyncManager } from "./SyncManager";
 
 export function Layout() {
@@ -8,11 +8,12 @@ export function Layout() {
   const user = userStr ? JSON.parse(userStr) : null;
 
   const navItems = [
-    { path: "/", label: "Dashboard", icon: Home },
+    { path: "/dashboard", label: "Dashboard", icon: Home },
     { path: "/pos", label: "Kasir", icon: ShoppingCart },
     { path: "/products", label: "Produk", icon: Package },
     { path: "/history", label: "Riwayat", icon: History },
     { path: "/reports", label: "Laporan", icon: BarChart3 },
+    { path: "/users", label: "Pengguna", icon: UserIcon },
     { path: "/settings", label: "Pengaturan", icon: SettingsIcon },
   ];
 
