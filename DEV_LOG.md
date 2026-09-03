@@ -139,3 +139,25 @@
 - **Problem:** Hard deleting transactions corrupts historical integrity and audit trail.
 - **Solution:** Replaced `DELETE /api/transactions/:id` with `POST /api/transactions/:id/void`. It restores stock, leaves a `void_reversal` log in StockLog, and marks the transaction as `void` with a `void_reason` and `voided_by` reference.
 **Follow-ups:** None.
+
+## [2026-09-03] TASK-M5: Production hardening and OSS growth
+**Role:** LD / QA
+**Modules/Functions:** Docker, health/readiness, structured logging, backups, bilingual docs
+**Files Touched:**
+- `Dockerfile`, `.dockerignore`, `docker-compose.yml`
+- `server.ts` (dynamic vite import, /api/health, /api/health/ready)
+- `src/utils/logger.ts` (LOG_LEVEL, LOG_FORMAT=json, ERROR_WEBHOOK_URL)
+- `scripts/backup.sh`, `scripts/restore.sh`
+- `CHANGELOG.md`, `README.id.md`, `docs/DEPLOYMENT.md`, `docs/MAINTAINERS.md`
+- `.github/dependabot.yml`, `vitest.config.ts`, `package.json` (name warung-app, v1.0.0)
+**Tests/Validation:**
+- API tests 44/44 pass (incl. new health.test.ts); vitest now excludes tests/e2e
+- `tsc --noEmit` + `vite build` passed; bash -n on both scripts passed
+- Production mode verified live on :3036: /api/health 200, /api/health/ready 200 (db up), SPA fallback 200
+- JSON log format verified line-by-line; Docker image build NOT verified (dockerd not installed on this server)
+**Problems/Solutions:**
+- **Problem:** vitest tried to collect Playwright spec (test.describe error).
+- **Solution:** `exclude: ['tests/e2e/**']` in vitest.config.ts.
+- **Problem:** Docker daemon unavailable (dockerd binary missing) → image build unverifiable locally.
+- **Solution:** verified the exact production entrypoint (`npm start`/tsx) natively instead; Dockerfile steps (npm ci, prisma generate, vite build) already proven on this machine.
+**Follow-ups:** Tag v1.0.0 pushed. GitHub release notes dapat dibuat dari CHANGELOG entry v1.0.0. Restore ci.yml dari git history kapan pun workflow mau diaktifkan lagi.
