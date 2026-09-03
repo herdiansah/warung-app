@@ -17,6 +17,8 @@
     "@prisma/client": "^6.19.2",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
     "axios": "^1.13.6",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",

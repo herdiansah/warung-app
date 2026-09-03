@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle2, Barcode } from "lucide-react";
+import { Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle2, Barcode, Camera } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { addCheckoutToOutbox } from "../utils/offlineQueue";
+import CameraScanner from "../components/CameraScanner";
 
 export default function POS() {
   const { showToast } = useToast();
@@ -19,6 +20,7 @@ export default function POS() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "credit">("cash");
   const [customerId, setCustomerId] = useState<string>("");
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const fetchProducts = () => {
     const token = localStorage.getItem("warung_token");
@@ -175,33 +177,42 @@ export default function POS() {
     }
   };
 
-  const handleScanBarcode = async () => {
-    const code = scanCode.trim();
-    if (!code) return;
-    setScanning(true);
+  const lookupBarcode = async (code: string): Promise<{ ok: boolean; message: string }> => {
     const token = localStorage.getItem("warung_token");
     try {
       const res = await fetch(`/api/products/barcode/${encodeURIComponent(code)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
-        if (res.status === 404) {
-          showToast("Produk dengan barcode ini tidak ditemukan", "error");
-        } else {
-          showToast("Gagal mencari barcode", "error");
-        }
-        setScanCode("");
-        return;
+        if (res.status === 404) return { ok: false, message: "Barcode tidak ditemukan" };
+        return { ok: false, message: "Gagal mencari barcode" };
       }
       const product = await res.json();
       addToCart(product);
-      setScanCode("");
-      if (scanInputRef.current) scanInputRef.current.focus();
-    } catch (err) {
-      showToast("Gagal menghubungi server", "error");
-    } finally {
-      setScanning(false);
+      return { ok: true, message: `${product.name} — ditambahkan` };
+    } catch {
+      return { ok: false, message: "Gagal menghubungi server" };
     }
+  };
+
+  const handleScanBarcode = async () => {
+    const code = scanCode.trim();
+    if (!code) return;
+    setScanning(true);
+    const result = await lookupBarcode(code);
+    if (!result.ok) showToast(result.message, "error");
+    setScanCode("");
+    if (scanInputRef.current) scanInputRef.current.focus();
+    setScanning(false);
+  };
+
+  const handleCameraScan = async (code: string): Promise<{ kind: "found" | "notfound"; message: string }> => {
+    const result = await lookupBarcode(code);
+    if (result.ok) {
+      showToast(result.message, "success");
+      return { kind: "found", message: result.message };
+    }
+    return { kind: "notfound", message: result.message };
   };
 
   const filteredProducts = products.filter((p) =>
@@ -249,8 +260,18 @@ export default function POS() {
                 }
               }}
               disabled={scanning}
-              className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50 mb-2"
+              className="w-full pl-10 pr-14 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50 mb-2"
             />
+            <button
+              type="button"
+              data-testid="pos-camera-scan"
+              onClick={() => setCameraOpen(true)}
+              title="Scan pakai kamera"
+              aria-label="Scan pakai kamera"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+            >
+              <Camera className="w-5 h-5" />
+            </button>
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -427,6 +448,12 @@ export default function POS() {
           </button>
         </div>
       </div>
+
+      <CameraScanner
+        open={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onScan={handleCameraScan}
+      />
     </div>
   );
 }
