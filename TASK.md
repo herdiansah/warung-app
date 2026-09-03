@@ -41,11 +41,11 @@
 - [x] TASK-M1-6: Timezone-Aware Daily & Monthly Reporting (Asia/Jakarta)
 
 ## M2 — Offline-first PWA POS
-*Status: In Progress*
-- [ ] TASK-M2-1: Add web app manifest & service worker (cache app shell)
-- [ ] TASK-M2-2: Offline checkout intents in IndexedDB (idempotency key)
-- [ ] TASK-M2-3: Server-side idempotency handling
-- [ ] TASK-M2-4: Sync queue states & conflict resolution screen
+*Status: Completed*
+- [x] TASK-M2-1: Add web app manifest & service worker (cache app shell)
+- [x] TASK-M2-2: Offline checkout intents in IndexedDB (idempotency key)
+- [x] TASK-M2-3: Server-side idempotency handling
+- [x] TASK-M2-4: Sync queue states & conflict resolution screen
 
 ## M3 — Store accounts, roles, and auditability
 *Status: Pending*

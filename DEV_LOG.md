@@ -61,3 +61,22 @@
 - **Problem:** Date filters for reports defaulted to UTC causing wrong end-of-day offsets.
 - **Solution:** Integrated `date-fns-tz` forcing bounds to `Asia/Jakarta` explicitly.
 **Follow-ups:** None. Proceeding to M2.
+
+## [2026-09-02] TASK-M2: Offline-first PWA POS
+**Role:** LD/FE
+**Modules/Functions:** Offline Queue, PWA Manifest, Idempotent Checkout
+**Files Touched:**
+- `vite.config.ts`, `index.html`, `src/main.tsx`
+- `src/utils/offlineQueue.ts` (IndexedDB)
+- `src/components/SyncManager.tsx`
+- `src/pages/POS.tsx`
+- `server.ts`, `prisma/schema.prisma`
+**Tests/Validation:** 
+- E2E API tests added for Idempotency API (`tests/api/idempotency.test.ts`). Duplicate POSTs with same key only process once.
+- Frontend build successfully generates `sw.js` and Workbox.
+**Problems/Solutions:**
+- **Problem:** Transactions failing due to network throw standard TypeErrors.
+- **Solution:** Caught `TypeError` and `Failed to fetch`, generating a random UUID `idempotency_key` beforehand, and caching the intent to IndexedDB outbox.
+- **Problem:** Prisma interactive migration failed in headless mode when adding unique `idempotency_key`.
+- **Solution:** Piped `yes ''` to bypass the warning.
+**Follow-ups:** None.
