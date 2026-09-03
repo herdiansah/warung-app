@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { TrendingUp, ShoppingBag, AlertCircle, Plus, RefreshCw, BarChart, Calendar } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -10,6 +10,9 @@ export default function Dashboard() {
   
   // Date range filter states: 7, 30, or 90 days
   const [chartDays, setChartDays] = useState<number>(7);
+  const [chartLoading, setChartLoading] = useState(false);
+  // Guards stale responses when tabs are clicked in quick succession
+  const chartReqId = useRef(0);
 
   const fetchDashboard = () => {
     setLoading(true);
@@ -22,8 +25,8 @@ export default function Dashboard() {
         if (!res.ok) throw new Error("Gagal mengambil data");
         return res.json();
       })
-      .then((data) => {
-        setData(data);
+      .then((d) => {
+        setData(d);
         setLoading(false);
       })
       .catch(() => {
@@ -32,9 +35,33 @@ export default function Dashboard() {
       });
   };
 
+  const fetchChart = (days: number) => {
+    const reqId = ++chartReqId.current;
+    setChartLoading(true);
+    const token = localStorage.getItem("warung_token");
+    fetch(`/api/dashboard?days=${days}`, {
+      headers: { "Authorization": `Bearer ${token}` }
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Gagal");
+        return res.json();
+      })
+      .then((d) => {
+        // Ignore stale responses from a previous tab click
+        if (reqId !== chartReqId.current) return;
+        setData((prev: any) => ({ ...prev, chart_data: d.chart_data }));
+        setChartLoading(false);
+      })
+      .catch(() => {
+        if (reqId !== chartReqId.current) return;
+        setChartLoading(false);
+      });
+  };
+
+  // Initial load only — tab changes call fetchChart directly
   useEffect(() => {
     fetchDashboard();
-  }, [chartDays]);
+  }, []);
 
   if (loading) {
     return (
@@ -121,7 +148,7 @@ export default function Dashboard() {
             {[7, 30, 90].map((d) => (
               <button
                 key={d}
-                onClick={() => setChartDays(d)}
+                onClick={() => { setChartDays(d); fetchChart(d); }}
                 className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
                   chartDays === d 
                     ? "bg-white text-emerald-600 shadow-sm" 
@@ -133,7 +160,11 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
-        {!data.chart_data || data.chart_data.length === 0 ? (
+        {chartLoading ? (
+          <div className="flex items-center justify-center h-[80%]">
+            <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+          </div>
+        ) : !data.chart_data || data.chart_data.length === 0 ? (
           <div className="text-center py-10 text-gray-400">
             <BarChart className="w-10 h-10 mx-auto mb-2 opacity-30" />
             <p className="text-sm">Belum ada data penjualan</p>
