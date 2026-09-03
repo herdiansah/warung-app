@@ -125,7 +125,7 @@ async function startServer() {
           role,
           store_id: req.user?.store_id
         },
-        select: { id: true, name: true, email: true, role: true }
+        select: { id: true, name: true, email: true, role: true, store_id: true }
       });
 
       res.status(201).json(newUser);
@@ -603,8 +603,10 @@ async function startServer() {
       const threshold = parseInt(await getSetting("low_stock_threshold", "5"));
 
       const todayString = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-      const startDate = new Date(`${todayString}T00:00:00.000Z`);
-      const endDate = new Date(`${todayString}T23:59:59.999Z`);
+      const localDate = new Date(`${todayString}T00:00:00`);
+      const tzDate = toZonedTime(localDate, TIMEZONE);
+      const startDate = startOfDay(tzDate);
+      const endDate = endOfDay(tzDate);
 
       // Calculate today stats
       const todayAggregate = await prisma.transaction.aggregate({
@@ -614,7 +616,8 @@ async function startServer() {
           transaction_date: {
             gte: startDate,
             lte: endDate
-          }
+          },
+          status: { not: "void" }
         }
       });
 
@@ -628,22 +631,53 @@ async function startServer() {
       });
 
       // Getting top products for today
-      // Using queryRaw since Prisma aggregation doesn't easily JOIN and GROUP BY relation correctly
       const topProducts: any[] = await prisma.$queryRaw`
         SELECT p.name, SUM(ti.qty) as total_qty
         FROM TransactionItem ti
         JOIN Product p ON ti.product_id = p.id
         JOIN Transaction t ON ti.transaction_id = t.id
-        WHERE t.transaction_date >= ${startDate} AND t.transaction_date <= ${endDate}
+        WHERE t.transaction_date >= ${startDate} AND t.transaction_date <= ${endDate} AND t.status != 'void'
         GROUP BY p.name
         ORDER BY total_qty DESC
         LIMIT 5
       `;
 
+      // Sales data for chart (Last 7 days)
+      const sevenDaysAgoLocal = new Date();
+      sevenDaysAgoLocal.setDate(sevenDaysAgoLocal.getDate() - 6);
+      const sevenDaysAgoTz = toZonedTime(sevenDaysAgoLocal, TIMEZONE);
+      const sevenDaysAgoStart = startOfDay(sevenDaysAgoTz);
+
+      const salesDataRaw: any[] = await prisma.$queryRaw`
+        SELECT DATE(CONVERT_TZ(transaction_date, '+00:00', '+07:00')) as date, SUM(total_amount) as total
+        FROM Transaction 
+        WHERE transaction_date >= ${sevenDaysAgoStart} AND status != 'void'
+        GROUP BY DATE(CONVERT_TZ(transaction_date, '+00:00', '+07:00'))
+        ORDER BY date ASC
+      `;
+
+      const chart_data = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(sevenDaysAgoLocal);
+        d.setDate(d.getDate() + i);
+        const dateStr = d.toISOString().split('T')[0];
+        
+        const found = salesDataRaw.find(r => {
+          const rDateStr = r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date).split('T')[0];
+          return rDateStr === dateStr;
+        });
+
+        chart_data.push({
+          date: d.toLocaleDateString("id-ID", { weekday: 'short' }),
+          total: found ? Number(found.total) : 0
+        });
+      }
+
       res.json({
         today_total: Number(todayTotal),
         today_count: todayCount,
         low_stock: lowStock,
+        chart_data: chart_data,
         top_products: topProducts.map(tp => ({
           name: tp.name,
           total_qty: Number(tp.total_qty)

@@ -7,6 +7,7 @@ export interface AuthRequest extends Request {
         name: string;
         email: string;
         role: string;
+        store_id?: string | null;
     };
 }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { TrendingUp, ShoppingBag, AlertCircle, Plus, RefreshCw } from "lucide-react";
+import { TrendingUp, ShoppingBag, AlertCircle, Plus, RefreshCw, BarChart } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart as RechartsBarChart, Bar } from 'recharts';
 
 export default function Dashboard() {
   const [data, setData] = useState<any>(null);
@@ -105,6 +106,39 @@ export default function Dashboard() {
             <p className="text-3xl font-extrabold text-gray-900">{data.today_count ?? 0} <span className="text-base font-medium text-gray-400">Transaksi</span></p>
           </div>
         </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 h-80">
+        <div className="flex items-center gap-2 mb-6">
+          <BarChart className="w-5 h-5 text-emerald-600" />
+          <h2 className="text-lg font-bold text-gray-900">Penjualan 7 Hari Terakhir</h2>
+        </div>
+        {!data.chart_data || data.chart_data.length === 0 ? (
+          <div className="text-center py-10 text-gray-400">
+            <BarChart className="w-10 h-10 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">Belum ada data penjualan</p>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data.chart_data} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} dy={10} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} tickFormatter={(val) => `Rp ${(val/1000)}k`} />
+              <Tooltip 
+                formatter={(value: number) => [`Rp ${value.toLocaleString("id-ID")}`, "Penjualan"]}
+                labelStyle={{ color: '#374151', fontWeight: 600 }}
+                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
+              />
+              <Area type="monotone" dataKey="total" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
