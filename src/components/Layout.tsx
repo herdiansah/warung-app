@@ -1,11 +1,13 @@
+import { useState } from "react";
 import { Link, useLocation, Outlet } from "react-router-dom";
-import { Home, Package, ShoppingCart, History, BarChart3, LogOut, Settings as SettingsIcon, Users as UserIcon, Contact, Landmark, ClipboardCheck } from "lucide-react";
+import { Home, Package, ShoppingCart, History, BarChart3, LogOut, Settings as SettingsIcon, Users as UserIcon, Contact, Landmark, ClipboardCheck, MoreHorizontal, X } from "lucide-react";
 import { SyncManager } from "./SyncManager";
 
 export function Layout() {
   const location = useLocation();
   const userStr = localStorage.getItem("warung_user");
   const user = userStr ? JSON.parse(userStr) : null;
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems = [
     { path: "/", label: "Dashboard", icon: Home },
@@ -20,6 +22,11 @@ export function Layout() {
     { path: "/settings", label: "Pengaturan", icon: SettingsIcon },
   ];
 
+  // Mobile bottom nav: main items only, rest live in the "Lainnya" sheet
+  const primaryNav = navItems.slice(0, 4);
+  const secondaryNav = navItems.slice(4);
+  const isSecondaryActive = secondaryNav.some((i) => location.pathname === i.path);
+
   const handleLogout = () => {
     localStorage.removeItem("warung_token");
     localStorage.removeItem("warung_user");
@@ -30,7 +37,7 @@ export function Layout() {
     <div className="min-h-screen bg-gray-50 pb-20 md:pb-0 md:flex">
       {/* Mobile Bottom Nav */}
       <nav className="fixed bottom-0 w-full bg-white/95 backdrop-blur-lg border-t border-gray-200 flex justify-around p-1.5 md:hidden z-50 shadow-[0_-2px_10px_rgba(0,0,0,0.06)]">
-        {navItems.map((item) => {
+        {primaryNav.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
           return (
@@ -50,7 +57,68 @@ export function Layout() {
             </Link>
           );
         })}
+        {/* More button — opens the rest of the menu */}
+        <button
+          type="button"
+          data-testid="nav-more"
+          onClick={() => setMobileMenuOpen(true)}
+          className={`flex flex-col items-center p-1.5 rounded-xl transition-all ${isSecondaryActive
+              ? "text-emerald-600"
+              : "text-gray-400 active:text-gray-600"
+            }`}
+        >
+          <MoreHorizontal className={`w-5 h-5 mb-0.5 ${isSecondaryActive ? "stroke-[2.5]" : ""}`} />
+          <span className={`text-[9px] font-semibold ${isSecondaryActive ? "text-emerald-600" : ""}`}>
+            Lainnya
+          </span>
+        </button>
       </nav>
+
+      {/* Mobile "Lainnya" bottom sheet */}
+      {mobileMenuOpen && (
+        <div className="md:hidden">
+          <div
+            className="fixed inset-0 bg-black/40 z-50"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="fixed bottom-0 inset-x-0 z-50 bg-white rounded-t-2xl shadow-2xl p-4 pb-6 animate-slide-up max-h-[70vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-gray-900">Menu Lainnya</h2>
+              <button
+                type="button"
+                data-testid="nav-more-close"
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg"
+                aria-label="Tutup menu"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {secondaryNav.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    data-testid={`nav-${item.path.replace("/", "")}`}
+                    to={item.path}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all ${isActive
+                        ? "bg-emerald-50 text-emerald-600"
+                        : "text-gray-500 hover:bg-gray-50 active:bg-gray-100"
+                      }`}
+                  >
+                    <Icon className={`w-5 h-5 ${isActive ? "stroke-[2.5]" : ""}`} />
+                    <span className="text-[11px] font-semibold">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Desktop Sidebar */}
       <nav className="hidden md:flex flex-col w-64 bg-white border-r border-gray-100 min-h-screen shadow-sm">
