@@ -982,6 +982,125 @@ async function startServer() {
     }
   });
 
+  // --- Cash Ledger (Buku Kas) ---
+  const cashCategories = ["modal", "pribadi", "sewa", "listrik", "kulakan_lain", "lain"];
+
+  const cashMovementSchema = z.object({
+    type: z.enum(["in", "out"]),
+    category: z.enum(cashCategories as [string, ...string[]]),
+    amount: z.number().positive("Jumlah harus lebih dari 0"),
+    note: z.string().max(200).optional().nullable(),
+    moved_at: z.string().optional().nullable(),
+  });
+
+  app.get("/api/cash", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const { from, to } = req.query;
+      const where: any = {};
+      if (from || to) {
+        where.moved_at = {};
+        if (from) where.moved_at.gte = new Date(`${from}T00:00:00.000Z`);
+        if (to) where.moved_at.lte = new Date(`${to}T23:59:59.999Z`);
+      }
+      const movements = await prisma.cashMovement.findMany({
+        where,
+        orderBy: { moved_at: "desc" },
+        include: { user: { select: { name: true } } },
+      });
+      res.json(movements);
+    } catch (err: any) {
+      logger.error("GET /api/cash failed", { error: err.message });
+      res.status(500).json({ error: "Gagal mengambil data kas" });
+    }
+  });
+
+  app.post("/api/cash", authenticateToken, authorizeRole(["owner", "manager"]), async (req: AuthRequest, res) => {
+    try {
+      const parsed = cashMovementSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
+      }
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+      const movement = await prisma.cashMovement.create({
+        data: {
+          type: parsed.data.type,
+          category: parsed.data.category,
+          amount: parsed.data.amount,
+          note: parsed.data.note || null,
+          moved_at: parsed.data.moved_at ? new Date(parsed.data.moved_at) : new Date(),
+          created_by: userId,
+        }
+      });
+      logger.success("Cash movement recorded", { id: movement.id, type: movement.type, amount: parsed.data.amount });
+      res.json(movement);
+    } catch (err: any) {
+      logger.error("POST /api/cash failed", { error: err.message });
+      res.status(500).json({ error: "Gagal mencatat mutasi kas" });
+    }
+  });
+
+  app.delete("/api/cash/:id", authenticateToken, authorizeRole(["owner", "manager"]), async (req: AuthRequest, res) => {
+    try {
+      await prisma.cashMovement.delete({ where: { id: req.params.id } });
+      logger.success("Cash movement deleted", { id: req.params.id });
+      res.json({ success: true });
+    } catch (err: any) {
+      logger.error("DELETE /api/cash failed", { error: err.message });
+      res.status(500).json({ error: "Gagal menghapus mutasi kas" });
+    }
+  });
+
+  // Kas summary: saldo = penjualan tunai + pembayaran pelanggan + kas masuk - kas keluar
+  app.get("/api/cash/summary", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const { from, to } = req.query;
+      const dateFilter: any = {};
+      if (from) dateFilter.gte = new Date(`${from}T00:00:00.000Z`);
+      if (to) dateFilter.lte = new Date(`${to}T23:59:59.999Z`);
+
+      const [cashSales, creditPayments, movIn, movOut] = await Promise.all([
+        prisma.transaction.aggregate({
+          _sum: { total_amount: true },
+          where: {
+            status: "completed",
+            payment_method: "cash",
+            ...(Object.keys(dateFilter).length ? { transaction_date: dateFilter } : {}),
+          },
+        }),
+        prisma.customerPayment.aggregate({
+          _sum: { amount: true },
+          where: Object.keys(dateFilter).length ? { created_at: dateFilter } : {},
+        }),
+        prisma.cashMovement.aggregate({
+          _sum: { amount: true },
+          where: { type: "in", ...(Object.keys(dateFilter).length ? { moved_at: dateFilter } : {}) },
+        }),
+        prisma.cashMovement.aggregate({
+          _sum: { amount: true },
+          where: { type: "out", ...(Object.keys(dateFilter).length ? { moved_at: dateFilter } : {}) },
+        }),
+      ]);
+
+      const salesCash = Number(cashSales._sum.total_amount || 0);
+      const paymentsIn = Number(creditPayments._sum.amount || 0);
+      const cashIn = Number(movIn._sum.amount || 0);
+      const cashOut = Number(movOut._sum.amount || 0);
+
+      res.json({
+        sales_cash: salesCash,
+        payments_in: paymentsIn,
+        cash_in: cashIn,
+        cash_out: cashOut,
+        balance: salesCash + paymentsIn + cashIn - cashOut,
+      });
+    } catch (err: any) {
+      logger.error("GET /api/cash/summary failed", { error: err.message });
+      res.status(500).json({ error: "Gagal menghitung ringkasan kas" });
+    }
+  });
+
   // --- Export APIs ---
   function sendXlsx(res: any, data: any[], sheetName: string, filename: string) {
     const wb = XLSX.utils.book_new();
@@ -1137,6 +1256,19 @@ async function startServer() {
             reference_id: receipt_ref || null
           }
         });
+
+        // Auto-record cash out for kulakan (if cost known)
+        if (typeof cost_per_unit === "number" && cost_per_unit > 0) {
+          await txPrisma.cashMovement.create({
+            data: {
+              type: "out",
+              category: "kulakan_lain",
+              amount: qty * cost_per_unit,
+              note: `Kulakan ${product.name} x${qty}${supplier ? ` (${supplier})` : ""}`,
+              created_by: req.user?.id || "unknown",
+            }
+          });
+        }
       });
 
       logger.success("Product restocked", { product_id, qty, supplier });

@@ -28,6 +28,7 @@ model User {
   created_at    DateTime @default(now())
 
   transactions  Transaction[]
+  cash_movements CashMovement[]
 }
 
 model Setting {
@@ -78,6 +79,19 @@ model CustomerPayment {
   created_at  DateTime  @default(now())
 
   @@index([customer_id])
+}
+
+model CashMovement {
+  id         String   @id @default(uuid())
+  type       String   // in | out
+  category   String   // modal, pribadi, sewa, listrik, kulakan_lain, lain
+  amount     Decimal
+  note       String?
+  moved_at   DateTime @default(now())
+  created_by String
+  user       User     @relation(fields: [created_by], references: [id])
+
+  @@index([moved_at])
 }
 
 model Transaction {

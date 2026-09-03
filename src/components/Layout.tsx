@@ -1,5 +1,5 @@
 import { Link, useLocation, Outlet } from "react-router-dom";
-import { Home, Package, ShoppingCart, History, BarChart3, LogOut, Settings as SettingsIcon, Users as UserIcon, Contact } from "lucide-react";
+import { Home, Package, ShoppingCart, History, BarChart3, LogOut, Settings as SettingsIcon, Users as UserIcon, Contact, Landmark } from "lucide-react";
 import { SyncManager } from "./SyncManager";
 
 export function Layout() {
@@ -14,6 +14,7 @@ export function Layout() {
     { path: "/history", label: "Riwayat", icon: History },
     { path: "/reports", label: "Laporan", icon: BarChart3 },
     { path: "/customers", label: "Pelanggan", icon: Contact },
+    { path: "/cash", label: "Buku Kas", icon: Landmark },
     { path: "/users", label: "Pengguna", icon: UserIcon },
     { path: "/settings", label: "Pengaturan", icon: SettingsIcon },
   ];
