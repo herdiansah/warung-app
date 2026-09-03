@@ -13,6 +13,9 @@ export default function POS() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "credit">("cash");
+  const [customerId, setCustomerId] = useState<string>("");
 
   const fetchProducts = () => {
     const token = localStorage.getItem("warung_token");
@@ -26,8 +29,19 @@ export default function POS() {
       });
   };
 
+  const fetchCustomers = () => {
+    const token = localStorage.getItem("warung_token");
+    fetch("/api/customers", {
+      headers: { "Authorization": `Bearer ${token}` }
+    })
+      .then((res) => res.ok ? res.json() : [])
+      .then((data) => setCustomers(Array.isArray(data) ? data : []))
+      .catch(() => setCustomers([]));
+  };
+
   useEffect(() => {
     fetchProducts();
+    fetchCustomers();
   }, []);
 
   const addToCart = (product: any) => {
@@ -92,15 +106,21 @@ export default function POS() {
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
+    if (paymentMethod === "credit" && !customerId) {
+      showToast("Pilih pelanggan untuk transaksi kredit!", "error");
+      return;
+    }
     setIsSubmitting(true);
     setCheckoutError(null);
 
     const idempotency_key = crypto.randomUUID();
-    const payload = {
+    const payload: any = {
       idempotency_key,
       items: cart.map(item => ({ product_id: item.product_id, qty: item.qty })),
-      total_amount: totalAmount
+      total_amount: totalAmount,
+      payment_method: paymentMethod,
     };
+    if (paymentMethod === "credit") payload.customer_id = customerId;
 
     try {
       const token = localStorage.getItem("warung_token");
@@ -117,6 +137,8 @@ export default function POS() {
         setIsSuccess(true);
         setCart([]);
         setRetryCount(0);
+        setPaymentMethod("cash");
+        setCustomerId("");
         fetchProducts();
         setTimeout(() => setIsSuccess(false), 3000);
       } else {
@@ -282,6 +304,42 @@ export default function POS() {
         </div>
 
         <div className="p-4 bg-gray-50 border-t border-gray-200 space-y-3">
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setPaymentMethod("cash"); setCustomerId(""); }}
+              className={`flex-1 py-2 rounded-xl text-sm font-bold border transition-all ${paymentMethod === "cash"
+                ? "bg-emerald-600 text-white border-emerald-600"
+                : "bg-white text-gray-500 border-gray-200 hover:border-emerald-300"
+                }`}
+            >
+              Tunai
+            </button>
+            <button
+              onClick={() => setPaymentMethod("credit")}
+              className={`flex-1 py-2 rounded-xl text-sm font-bold border transition-all ${paymentMethod === "credit"
+                ? "bg-amber-500 text-white border-amber-500"
+                : "bg-white text-gray-500 border-gray-200 hover:border-amber-300"
+                }`}
+            >
+              Kredit (Utang)
+            </button>
+          </div>
+
+          {paymentMethod === "credit" && (
+            <select
+              value={customerId}
+              onChange={(e) => setCustomerId(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white text-sm"
+            >
+              <option value="">— Pilih pelanggan —</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}{c.balance > 0 ? ` (utang Rp ${Number(c.balance).toLocaleString("id-ID")})` : ""}
+                </option>
+              ))}
+            </select>
+          )}
+
           <div className="flex justify-between items-center">
             <span className="text-gray-500 font-medium text-sm">Total Tagihan</span>
             <span className="text-2xl font-extrabold text-emerald-600">

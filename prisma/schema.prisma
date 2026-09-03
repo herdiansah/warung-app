@@ -54,6 +54,32 @@ model Product {
   @@index([name])
 }
 
+model Customer {
+  id         String   @id @default(uuid())
+  name       String
+  phone      String?
+  address    String?
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+
+  transactions Transaction[]
+  payments     CustomerPayment[]
+
+  @@index([name])
+}
+
+model CustomerPayment {
+  id          String    @id @default(uuid())
+  customer_id String
+  customer    Customer  @relation(fields: [customer_id], references: [id])
+  amount      Decimal
+  note        String?
+  created_by  String
+  created_at  DateTime  @default(now())
+
+  @@index([customer_id])
+}
+
 model Transaction {
   id               String            @id @default(uuid())
   transaction_date DateTime          @default(now())
@@ -63,6 +89,9 @@ model Transaction {
   status           String            @default("completed") // completed, void
   void_reason      String?
   voided_by        String?
+  payment_method   String            @default("cash") // cash, credit
+  customer_id      String?
+  customer         Customer?         @relation(fields: [customer_id], references: [id])
   store_id         String?
   store            Store?            @relation(fields: [store_id], references: [id])
   user             User              @relation(fields: [created_by], references: [id])

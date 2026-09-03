@@ -334,8 +334,22 @@ async function startServer() {
     try {
       const items = validateCheckoutItems(req.body?.items);
       const idempotency_key = req.body?.idempotency_key;
+      const payment_method = req.body?.payment_method === "credit" ? "credit" : "cash";
+      const customer_id = req.body?.customer_id || null;
       const userId = req.user?.id;
       if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+      if (payment_method === "credit") {
+        if (!customer_id) {
+          return res.status(400).json({ error: "Transaksi kredit wajib memilih pelanggan" });
+        }
+        const customer = await prisma.customer.findFirst({
+          where: { id: customer_id, is_active: true }
+        });
+        if (!customer) {
+          return res.status(400).json({ error: "Pelanggan tidak ditemukan atau tidak aktif" });
+        }
+      }
 
       if (idempotency_key) {
         const existingTx = await prisma.transaction.findUnique({
@@ -408,6 +422,8 @@ async function startServer() {
             idempotency_key,
             total_amount: calculatedTotal,
             created_by: userId,
+            payment_method,
+            customer_id,
             items: {
               create: preparedItems
             }
@@ -803,6 +819,166 @@ async function startServer() {
     } catch (err: any) {
       logger.error("GET /api/reports failed", { month: req.query.month, error: err.message });
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- Customer Ledger (Utang/Piutang) ---
+  const customerSchema = z.object({
+    name: z.string().min(1, "Nama pelanggan wajib diisi").max(100),
+    phone: z.string().max(20).optional().nullable(),
+    address: z.string().max(200).optional().nullable(),
+  });
+
+  app.get("/api/customers", authenticateToken, async (req, res) => {
+    try {
+      const customers = await prisma.customer.findMany({
+        where: { is_active: true },
+        orderBy: { name: "asc" },
+      });
+
+      // Compute outstanding balance per customer:
+      // credit transactions (completed) minus payments received.
+      const [creditTx, payments] = await Promise.all([
+        prisma.transaction.groupBy({
+          by: ["customer_id"],
+          where: { payment_method: "credit", status: "completed", customer_id: { not: null } },
+          _sum: { total_amount: true },
+        }),
+        prisma.customerPayment.groupBy({
+          by: ["customer_id"],
+          _sum: { amount: true },
+        }),
+      ]);
+
+      const creditMap = new Map(creditTx.map((t) => [t.customer_id, Number(t._sum.total_amount || 0)]));
+      const paidMap = new Map(payments.map((p) => [p.customer_id, Number(p._sum.amount || 0)]));
+
+      const result = customers.map((c) => {
+        const totalCredit = creditMap.get(c.id) || 0;
+        const totalPaid = paidMap.get(c.id) || 0;
+        return { ...c, total_credit: totalCredit, total_paid: totalPaid, balance: totalCredit - totalPaid };
+      });
+
+      res.json(result);
+    } catch (err: any) {
+      logger.error("GET /api/customers failed", { error: err.message });
+      res.status(500).json({ error: "Gagal mengambil data pelanggan" });
+    }
+  });
+
+  app.post("/api/customers", authenticateToken, authorizeRole(["owner", "manager"]), async (req: AuthRequest, res) => {
+    try {
+      const parsed = customerSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
+      }
+      const { name, phone, address } = parsed.data;
+      const customer = await prisma.customer.create({
+        data: { name, phone: phone || null, address: address || null }
+      });
+      logger.success("Customer created", { id: customer.id, name });
+      res.json(customer);
+    } catch (err: any) {
+      logger.error("POST /api/customers failed", { error: err.message });
+      res.status(500).json({ error: "Gagal menambah pelanggan" });
+    }
+  });
+
+  app.put("/api/customers/:id", authenticateToken, authorizeRole(["owner", "manager"]), async (req: AuthRequest, res) => {
+    try {
+      const parsed = customerSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
+      }
+      const { name, phone, address } = parsed.data;
+      const customer = await prisma.customer.update({
+        where: { id: req.params.id },
+        data: { name, phone: phone || null, address: address || null }
+      });
+      logger.success("Customer updated", { id: customer.id });
+      res.json(customer);
+    } catch (err: any) {
+      logger.error("PUT /api/customers failed", { error: err.message });
+      res.status(500).json({ error: "Gagal memperbarui pelanggan" });
+    }
+  });
+
+  app.delete("/api/customers/:id", authenticateToken, authorizeRole(["owner", "manager"]), async (req: AuthRequest, res) => {
+    try {
+      const txCount = await prisma.transaction.count({ where: { customer_id: req.params.id } });
+      if (txCount > 0) {
+        return res.status(400).json({ error: "Pelanggan masih punya riwayat transaksi, tidak bisa dihapus" });
+      }
+      await prisma.customer.update({ where: { id: req.params.id }, data: { is_active: false } });
+      logger.success("Customer deactivated", { id: req.params.id });
+      res.json({ success: true });
+    } catch (err: any) {
+      logger.error("DELETE /api/customers failed", { error: err.message });
+      res.status(500).json({ error: "Gagal menghapus pelanggan" });
+    }
+  });
+
+  // Ledger detail: transactions + payments for one customer
+  app.get("/api/customers/:id/ledger", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const customer = await prisma.customer.findUnique({ where: { id: req.params.id } });
+      if (!customer) return res.status(404).json({ error: "Pelanggan tidak ditemukan" });
+
+      const [transactions, payments] = await Promise.all([
+        prisma.transaction.findMany({
+          where: { customer_id: req.params.id, payment_method: "credit" },
+          orderBy: { transaction_date: "desc" },
+          include: { user: { select: { name: true } } },
+        }),
+        prisma.customerPayment.findMany({
+          where: { customer_id: req.params.id },
+          orderBy: { created_at: "desc" },
+        }),
+      ]);
+
+      const totalCredit = transactions.filter((t) => t.status === "completed").reduce((s, t) => s + Number(t.total_amount), 0);
+      const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0);
+
+      res.json({
+        customer,
+        transactions,
+        payments,
+        total_credit: totalCredit,
+        total_paid: totalPaid,
+        balance: totalCredit - totalPaid,
+      });
+    } catch (err: any) {
+      logger.error("GET /api/customers/ledger failed", { error: err.message });
+      res.status(500).json({ error: "Gagal mengambil buku pelanggan" });
+    }
+  });
+
+  // Record a payment (bayar cicilan utang)
+  app.post("/api/customers/:id/payments", authenticateToken, async (req: AuthRequest, res) => {
+    try {
+      const parsed = z.object({
+        amount: z.number().positive("Jumlah pembayaran harus lebih dari 0"),
+        note: z.string().max(200).optional().nullable(),
+      }).safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.issues[0].message });
+      }
+      const customer = await prisma.customer.findFirst({ where: { id: req.params.id, is_active: true } });
+      if (!customer) return res.status(404).json({ error: "Pelanggan tidak ditemukan" });
+
+      const payment = await prisma.customerPayment.create({
+        data: {
+          customer_id: req.params.id,
+          amount: parsed.data.amount,
+          note: parsed.data.note || null,
+          created_by: req.user?.id || "unknown",
+        }
+      });
+      logger.success("Customer payment recorded", { customer_id: req.params.id, amount: parsed.data.amount });
+      res.json(payment);
+    } catch (err: any) {
+      logger.error("POST /api/customers/payments failed", { error: err.message });
+      res.status(500).json({ error: "Gagal mencatat pembayaran" });
     }
   });
 
