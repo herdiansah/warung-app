@@ -1,19 +1,30 @@
 # Warung App
 
-Warung App is an open-source sales, inventory, and profit-recording application for Indonesian micro-retail businesses (“warung”) and neighborhood shops. It is designed to make daily shop operations approachable without accounting expertise.
+Warung App is an open-source sales, inventory, and profit-recording application for Indonesian micro-retail businesses ("warung") and neighborhood shops. It is designed to make daily shop operations approachable without accounting expertise.
+
+Read this in [Bahasa Indonesia](README.id.md).
 
 ## Current features
 
 - Dashboard for daily sales, transaction count, best-selling products, and low-stock alerts.
-- Product management with pricing, stock, categories, search, and soft deletion for sold products.
-- Point-of-sale checkout with server-side pricing and stock validation.
+- Product management with pricing, stock, categories, search, soft deletion for sold products, and bulk import from XLSX/CSV.
+- Point-of-sale (POS) checkout with server-side pricing and stock validation, plus barcode scanner input.
+- Offline-first PWA: checkout intents are queued in IndexedDB and synced with idempotency keys when the connection returns.
 - Stock adjustments and an auditable stock-movement history.
 - Monthly sales reports with revenue, transaction totals, gross profit, and best-selling products.
+- Daily closing report (tutup kasir) with variance tracking and approval.
+- Purchase/restock workflow with automatic cash-out on kulakan.
+- Customer receivables ledger and cash movement ledger (kas masuk/kas keluar).
+- Transaction void/reversal workflow with a recorded reason.
+- Multi-role access (owner, manager, cashier) with server-side authorization and an audit log.
+- CSV/XLSX export for products, stock, sales, and reports.
 - JWT-protected API endpoints and bcrypt password hashes.
+- Health endpoints for liveness (`/api/health`) and readiness (`/api/health/ready`).
+- Structured logging with `LOG_LEVEL` filtering, JSON output, and an error-tracking webhook hook.
 
 ## Status
 
-This is an actively maintained MVP. It requires MySQL and is not yet offline-first; PWA/offline synchronization, multi-user roles, exports, automated database backups, and a daily report endpoint remain planned work. See the GitHub issues and project documentation for details.
+Actively maintained. Version 1.0.0. Requires MySQL (compatible with TiDB Serverless). See [CHANGELOG.md](CHANGELOG.md) for release history and [MILESTONES.md](docs/MILESTONES.md) for the roadmap.
 
 ## Tech stack
 
@@ -47,10 +58,34 @@ The development server runs at `http://127.0.0.1:3000`.
 ## Quality checks
 
 ```bash
-npm test
+npm test        # API integration tests (Vitest)
+npm run test:e2e # Playwright E2E smoke tests
 npm run lint
 npm run build
 ```
+
+## Production deployment
+
+Warung App ships with a production Docker image (multi-stage build, non-root runtime, HEALTHCHECK) and a `docker-compose.yml` example:
+
+```bash
+# Fill in .env first, then:
+docker compose up -d --build
+```
+
+For bare-metal deployment, backups, restore drills, upgrade, and rollback steps, see [DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+## Logging
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
+| `LOG_FORMAT` | `pretty` | `pretty` (colored console + `logs/app.log`) or `json` (stdout, collector-ready) |
+| `ERROR_WEBHOOK_URL` | (unset) | POSTs every error-level log as JSON to this URL (e.g. Sentry-compatible ingest, Slack webhook) |
+
+## Backups
+
+Run `scripts/backup.sh` manually, via cron, or in Docker to produce a gzipped (optionally age-encrypted) MySQL dump with retention; `scripts/restore.sh` restores it. Full drill in [DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Security
 
@@ -60,7 +95,7 @@ npm run build
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening an issue or pull request. Community participation is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening an issue or pull request. Maintainers: see [MAINTAINERS.md](docs/MAINTAINERS.md). Community participation is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## License
 
