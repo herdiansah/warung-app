@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
-import { BarChart3, TrendingUp, DollarSign, PackageOpen, Calendar } from "lucide-react";
+import { BarChart3, TrendingUp, DollarSign, PackageOpen, Calendar, Download } from "lucide-react";
 
 export default function Reports() {
   const [data, setData] = useState<any>(null);
@@ -10,13 +10,12 @@ export default function Reports() {
     new Date().toISOString().slice(0, 7) // YYYY-MM
   );
 
+  const token = localStorage.getItem("warung_token");
+
   useEffect(() => {
     setLoading(true);
-    const token = localStorage.getItem("warung_token");
     fetch(`/api/reports/monthly?month=${monthFilter}`, {
-      headers: {
-        "Authorization": `Bearer ${token}`
-      }
+      headers: { "Authorization": `Bearer ${token}` }
     })
       .then((res) => {
         if (!res.ok) throw new Error("Gagal mengambil laporan");
@@ -31,6 +30,18 @@ export default function Reports() {
         setLoading(false);
       });
   }, [monthFilter]);
+
+  const downloadExport = async (url: string) => {
+    const res = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
+    if (!res.ok) return alert("Gagal mengunduh file");
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    const cd = res.headers.get("Content-Disposition");
+    a.download = cd?.match(/filename="(.+)"/)?.[1] || "export.xlsx";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
   return (
     <div className="space-y-6">
@@ -47,6 +58,18 @@ export default function Reports() {
           />
         </div>
       </header>
+
+      <div className="flex flex-wrap gap-2">
+        <button onClick={() => downloadExport(`/api/export/sales-monthly?month=${monthFilter}`)} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-colors">
+          <Download className="w-4 h-4" /> Export Penjualan
+        </button>
+        <button onClick={() => downloadExport("/api/export/products")} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors">
+          <Download className="w-4 h-4" /> Export Produk
+        </button>
+        <button onClick={() => downloadExport("/api/export/stock-history")} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 transition-colors">
+          <Download className="w-4 h-4" /> Export Riwayat Stok
+        </button>
+      </div>
 
       {loading ? (
         <div className="text-center py-12 text-gray-500">Memuat laporan...</div>

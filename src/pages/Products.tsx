@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, Search, X, Minus, Package, History, AlertTriangle } from "lucide-react";
+import { Plus, Edit, Trash2, Search, X, Minus, Package, History, AlertTriangle, PackagePlus } from "lucide-react";
 import { StockHistoryTab } from "../components/StockHistoryTab";
 import { useToast } from "../components/Toast";
 
@@ -22,6 +22,8 @@ export default function Products() {
   const [minMarginPercent, setMinMarginPercent] = useState<number>(10);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [restockTarget, setRestockTarget] = useState<any>(null);
+  const [restockForm, setRestockForm] = useState({ qty: "", cost_per_unit: "", supplier: "", receipt_ref: "" });
 
   const adjustStock = async (id: number, diff: number) => {
     const token = localStorage.getItem("warung_token");
@@ -168,6 +170,34 @@ export default function Products() {
     p.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleRestock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = localStorage.getItem("warung_token");
+    try {
+      const res = await fetch("/api/stocks/restock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({
+          product_id: restockTarget.id,
+          qty: parseInt(restockForm.qty),
+          cost_per_unit: restockForm.cost_per_unit ? parseFloat(restockForm.cost_per_unit) : undefined,
+          supplier: restockForm.supplier || undefined,
+          receipt_ref: restockForm.receipt_ref || undefined
+        })
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Gagal restock");
+      }
+      showToast(`Restock ${restockTarget.name} berhasil`, "success");
+      setRestockTarget(null);
+      setRestockForm({ qty: "", cost_per_unit: "", supplier: "", receipt_ref: "" });
+      fetchProducts();
+    } catch (err: any) {
+      showToast(err.message, "error");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -258,16 +288,22 @@ export default function Products() {
 
                   <div className="flex gap-2 pt-4 border-t border-gray-100">
                     <button
+                      onClick={() => { setRestockTarget(product); setRestockForm({ qty: "", cost_per_unit: product.purchase_price.toString(), supplier: "", receipt_ref: "" }); }}
+                      className="flex-1 flex items-center justify-center gap-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg font-medium transition-colors text-sm"
+                    >
+                      <PackagePlus className="w-4 h-4" /> Kulakan
+                    </button>
+                    <button
                       onClick={() => handleOpenModal(product)}
-                      className="flex-1 flex items-center justify-center gap-2 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg font-medium transition-colors"
+                      className="flex-1 flex items-center justify-center gap-1 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg font-medium transition-colors text-sm"
                     >
                       <Edit className="w-4 h-4" /> Edit
                     </button>
                     <button
                       onClick={() => setDeleteTarget(product)}
-                      className="flex-1 flex items-center justify-center gap-2 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium transition-colors"
+                      className="flex items-center justify-center gap-1 py-2 px-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium transition-colors text-sm"
                     >
-                      <Trash2 className="w-4 h-4" /> Hapus
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -449,6 +485,46 @@ export default function Products() {
                 >
                   Simpan
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Restock/Kulakan */}
+      {restockTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[100]">
+          <div className="bg-white rounded-2xl w-full max-w-md">
+            <div className="flex justify-between items-center p-4 border-b border-gray-100">
+              <h2 className="text-xl font-bold text-gray-900">Kulakan: {restockTarget.name}</h2>
+              <button onClick={() => setRestockTarget(null)} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleRestock} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Jumlah Masuk *</label>
+                <input required type="number" min="1" value={restockForm.qty} onChange={(e) => setRestockForm({ ...restockForm, qty: e.target.value })}
+                  className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="0" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Harga Beli per Unit</label>
+                <input type="number" min="0" value={restockForm.cost_per_unit} onChange={(e) => setRestockForm({ ...restockForm, cost_per_unit: e.target.value })}
+                  className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Kosongkan jika tidak berubah" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
+                <input type="text" value={restockForm.supplier} onChange={(e) => setRestockForm({ ...restockForm, supplier: e.target.value })}
+                  className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Nama supplier" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">No. Nota/Referensi</label>
+                <input type="text" value={restockForm.receipt_ref} onChange={(e) => setRestockForm({ ...restockForm, receipt_ref: e.target.value })}
+                  className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="INV-001" />
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={() => setRestockTarget(null)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-colors">Batal</button>
+                <button type="submit" className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-sm transition-colors">Simpan Kulakan</button>
               </div>
             </form>
           </div>
